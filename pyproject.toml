@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "toolboundary"
+version = "0.1.0"
+description = "Runtime boundary enforcement for AI agents -- as a library, not a service."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Geoffrey (Jaycubic)" }
+]
+keywords = [
+    "ai-agents", "agent-security", "llm", "langchain",
+    "ai-governance", "zero-trust", "guardrails", "tool-calling"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=0.1.0"]
+# The optional network enforcement layer (toolboundary.network, toolboundary.tokens)
+# is stdlib-only and needs no extra dependency -- listed here only so
+# `pip install toolboundary[network]` is a documented, discoverable no-op that
+# reads naturally alongside the langchain extra.
+network = []
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.8",
+    "langchain-core>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Jaycubic/toolboundary"
+Repository = "https://github.com/Jaycubic/toolboundary"
+Issues = "https://github.com/Jaycubic/toolboundary/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/toolboundary"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=toolboundary --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files make many trusted, self-issued HTTP calls to servers spun up
+# within the same test (see test_network.py) and construct TokenIssuer
+# instances with obviously-fake literal secrets (e.g. "test-secret") purely
+# as fixture data -- S310/S106 exist to catch untrusted URLs and real
+# leaked credentials in production code, neither of which applies here.
+"tests/*" = ["S310", "S106"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
