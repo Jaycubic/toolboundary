@@ -28,7 +28,7 @@ unpermitted action.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type  # noqa: UP035
 
 from ..boundary import Boundary
 from ..enums import AccessMode
@@ -75,7 +75,7 @@ def guard_tool(
     class _GuardedTool(BaseTool):
         name: str = tool.name
         description: str = tool.description
-        args_schema: Optional[Type[Any]] = getattr(tool, "args_schema", None)
+        args_schema: Optional[Type[Any]] = getattr(tool, "args_schema", None)  # noqa: UP006, UP045
         return_direct: bool = getattr(tool, "return_direct", False)
 
         def _evaluate(self, kwargs: dict[str, Any]) -> None:
