@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-    { name = "Geoffrey (Jaycubic)" }
+    { name = "Jofrey John Joseph", email = "jofreyjohnmrutu01@gmail.com" }
 ]
 keywords = [
     "ai-agents", "agent-security", "llm", "langchain",
