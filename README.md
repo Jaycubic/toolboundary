@@ -241,6 +241,21 @@ cannot* reach a tool's network endpoint except through an approved path, you nee
 network-layer control (a sidecar proxy, egress firewall rule, or service mesh policy)
 in addition to ToolBoundary, not instead of it.
 
+## Documentation
+
+Explore the project by topic:
+
+- [Architecture](docs/ARCHITECTURE.md) — enforcement boundary, policy evaluation, audit flow, and framework integrations.
+- [Use Cases](docs/USE-CASES.md) — AI agent guardrails, LLM tool-call security, agent authorization, human approval, and auditing.
+- [API Reference](docs/API.md) — complete public API and configuration reference.
+- [Contributing](CONTRIBUTING.md) — development setup and contribution areas.
+- [Security Policy](SECURITY.md) — vulnerability reporting and security scope.
+
+## Package Metadata
+
+ToolBoundary is published as the `toolboundary` Python package and is intended for Python 3.9+ applications. The package metadata includes keywords covering AI agent security, LLM security, guardrails, tool-calling security, least privilege, agent authorization, runtime policy, and human-in-the-loop workflows.
+
+---
 ## Installation
 
 ```bash
