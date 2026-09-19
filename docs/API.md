@@ -43,6 +43,9 @@ Boundary(
 | `fail_closed_on_hook_error` | If `True` (default), an exception inside a policy hook denies the call. If `False`, the hook is treated as "allow" on error. |
 | `token_issuer` | Optional `toolboundary.tokens.TokenIssuer`. Only needed if you use `check_and_authorize()` / the network enforcement layer. |
 
+See [Policy hook examples](POLICY-HOOKS.md) for time-of-day, environment,
+trusted-network metadata, and external decision-callable patterns.
+
 ### `Boundary.check(...)`
 
 ```python
