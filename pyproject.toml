@@ -52,6 +52,7 @@ dev = [
 Homepage = "https://github.com/Jaycubic/toolboundary"
 Repository = "https://github.com/Jaycubic/toolboundary"
 Issues = "https://github.com/Jaycubic/toolboundary/issues"
+Documentation = "https://github.com/Jaycubic/toolboundary/tree/main/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/toolboundary"]
