@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: "ToolBoundary"
+message: "If you use ToolBoundary in research or software, please cite the project."
+type: software
+authors:
+  - family-names: "Joseph"
+    given-names: "Jofrey John"
+    alias: "Jaycubic"
+repository-code: https://github.com/Jaycubic/toolboundary
+license: "MIT"
