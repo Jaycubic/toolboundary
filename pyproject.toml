@@ -13,8 +13,11 @@ authors = [
     { name = "Jofrey John Joseph", email = "jofreyjohnmrutu01@gmail.com" }
 ]
 keywords = [
-    "ai-agents", "agent-security", "llm", "langchain",
-    "ai-governance", "zero-trust", "guardrails", "tool-calling"
+    "ai-agents", "agent-security", "ai-agent-security", "llm",
+    "llm-security", "ai-governance", "ai-guardrails", "agent-guardrails",
+    "zero-trust", "least-privilege", "tool-calling", "tool-security",
+    "agent-authorization", "runtime-policy", "human-in-the-loop",
+    "autonomous-agents", "langchain", "python-security"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
