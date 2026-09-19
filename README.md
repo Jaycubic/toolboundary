@@ -1,6 +1,8 @@
 # ToolBoundary
 
-**Runtime boundary enforcement for AI agents — as a library, not a service.**
+**Runtime boundary enforcement and policy control for AI agents — as a local Python library, not a service.**
+
+ToolBoundary is an **AI agent security** library for controlling LLM tool calls at runtime. It provides local policy enforcement, tool permissions, rate limits, value and record ceilings, autonomy controls, approval gates, audit logging, and an emergency kill switch without requiring a separate gateway or governance server.
 
 [![PyPI](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -169,6 +171,47 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
   zero dependencies. Framework integrations (LangChain today; more welcome via PR) are
   optional extras.
 
+## AI Agent Security Use Cases
+
+ToolBoundary is designed for developers building **LLM-powered applications, AI agents, tool-calling agents, and autonomous workflows** that need a local runtime policy boundary.
+
+Common use cases include:
+
+- **AI agent guardrails:** restrict which tools an agent can invoke and under what conditions.
+- **LLM tool-call security:** evaluate the exact tool, access mode, arguments, value, rate, environment, and autonomy policy before execution.
+- **Agent authorization:** enforce least-privilege tool permissions inside the application process.
+- **Human-in-the-loop controls:** require approval for sensitive operations without introducing a separate approval service.
+- **AI security auditing:** emit structured allow, deny, and approval-required decisions to existing logging pipelines.
+- **Emergency agent shutdown:** activate an in-process or environment-variable kill switch for immediate denial of future calls.
+- **Framework integrations:** protect tools at their execution boundary through adapters such as the LangChain integration.
+
+ToolBoundary is intentionally an **application-layer control**, not a network firewall or a replacement for scoped credentials. See [Known limitations](#known-limitations--please-read-this) for the security boundary.
+
+## Security Model
+
+The enforcement flow is local and synchronous at the tool boundary:
+
+```text
+LLM / Agent
+    │
+    ▼
+Tool Invocation
+    │
+    ▼
+ToolBoundary Policy Check
+    │
+    ├── ALLOW ─────────────► Tool executes
+    ├── DENY ──────────────► BoundaryViolation
+    └── APPROVAL REQUIRED ─► Human / caller approval flow
+```
+
+The policy decision is made before the guarded function or wrapped tool is executed. Audit delivery is best-effort and does not determine whether the action is allowed.
+
+## Discovery Keywords
+
+This project covers **AI agent security, LLM security, AI tool security, tool-calling security, AI agent guardrails, runtime policy enforcement, agent authorization, least privilege for AI agents, autonomous agent safety, LangChain security, Python AI security, human-in-the-loop approval, tool permission management, AI governance for developers, and application-layer agent security**.
+
+---
 ## Known limitations — please read this
 
 ToolBoundary is an **in-process, application-layer** library. Being explicit about what
