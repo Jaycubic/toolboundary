@@ -132,7 +132,9 @@ Install with the LangChain extra: `pip install toolboundary[langchain]`
 | Emergency kill switch | in-process flag or environment variable |
 | Custom policy logic | `policy_hooks=[my_custom_check]` |
 
-Full field reference: see [`docs/API.md`](docs/API.md).
+See [`docs/POLICY-HOOKS.md`](docs/POLICY-HOOKS.md) for time-window,
+environment-aware, network-aware, and external-policy examples. Full field
+reference: see [`docs/API.md`](docs/API.md).
 
 ## Audit trail
 
