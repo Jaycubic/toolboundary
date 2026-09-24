@@ -2,6 +2,13 @@
 
 All notable changes to ToolBoundary are documented here.
 
+## [Unreleased]
+
+### Added
+- LangGraph integration (`toolboundary.integrations.langgraph`): `guard_tool_node`
+  builds an already-guarded `langgraph.prebuilt.ToolNode`, built on the same tool
+  wrapping as the LangChain integration. Install with `toolboundary[langgraph]`.
+
 ## [0.1.0] — Initial Public Alpha
 
 ### Added

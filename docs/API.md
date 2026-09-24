@@ -189,6 +189,30 @@ something the agent's reasoning loop has to remember to invoke.
 
 ---
 
+## `toolboundary.integrations.langgraph`
+
+Requires `pip install toolboundary[langgraph]`.
+
+```python
+from toolboundary.integrations.langgraph import guard_tool_node
+```
+
+- `guard_tool_node(tools, boundary, default_access_mode=..., overrides={...}, **tool_node_kwargs)` →
+  wraps a tool list with the same logic as `guard_tools`, then returns an
+  already-guarded `langgraph.prebuilt.ToolNode` built from it. Extra
+  keyword arguments (e.g. `handle_tool_errors`) are forwarded to `ToolNode`.
+- `guard_tool` / `guard_tools` are also re-exported here for graphs that
+  wire guarded tools into a custom node instead of the prebuilt `ToolNode`.
+
+LangGraph tools are the same `BaseTool` objects the LangChain integration
+wraps, and `ToolNode` invokes them through `.invoke()`/`.ainvoke()` — the
+same call site — so `guard_tool_node` is a thin, LangGraph-specific
+convenience over `guard_tools` rather than a separate enforcement
+mechanism. A denied call raises `BoundaryViolation`/`ApprovalRequired` out
+of the node; it is not swallowed into a tool message.
+
+---
+
 ## Network Enforcement
 
 Requires no extra install (`toolboundary.network` and `toolboundary.tokens`
@@ -197,7 +221,7 @@ imports these modules.
 
 ### The problem this solves
 
-`check()`, `guarded_tool`, and the LangChain wrappers are all
+`check()`, `guarded_tool`, and the LangChain/LangGraph wrappers are all
 **application-layer** controls. If any code path in your agent calls a
 tool's real network endpoint directly — bypassing ToolBoundary entirely —
 none of the above can see or stop it.

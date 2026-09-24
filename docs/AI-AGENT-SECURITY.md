@@ -44,6 +44,7 @@ ToolBoundary can act as a local guardrail for:
 - internal developer agents
 - automation bots
 - LangChain-based agents
+- LangGraph-based agents
 
 ## Least-Privilege Agent Authorization
 
@@ -69,6 +70,10 @@ Every decision can produce structured audit information. Developers can route th
 
 ToolBoundary provides a LangChain adapter that wraps the tool objects used by the execution framework. This keeps the security check at the tool boundary rather than relying on the model's reasoning process to remember to invoke a separate policy function.
 
+## LangGraph
+
+ToolBoundary provides a LangGraph adapter that returns an already-guarded `ToolNode`, built on the same tool-wrapping as the LangChain adapter, so a compiled graph's tool-calling node enforces the policy without extra wiring.
+
 ## What ToolBoundary Does Not Provide
 
 ToolBoundary is deliberately narrow:
@@ -82,4 +87,4 @@ For stronger security, combine the library with identity controls, scoped creden
 
 ## Related Topics
 
-AI agent security, LLM security, tool-calling security, AI guardrails, agent authorization, least-privilege AI agents, runtime policy enforcement, human-in-the-loop AI, LangChain security, Python AI security, autonomous agent controls, and application-layer AI security.
+AI agent security, LLM security, tool-calling security, AI guardrails, agent authorization, least-privilege AI agents, runtime policy enforcement, human-in-the-loop AI, LangChain security, LangGraph security, Python AI security, autonomous agent controls, and application-layer AI security.
