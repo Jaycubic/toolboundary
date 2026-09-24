@@ -30,6 +30,10 @@ Structured allow, deny, and approval-required decisions can flow into existing l
 
 The LangChain integration wraps `BaseTool` objects so the policy check executes at the tool boundary rather than relying on the model or agent reasoning loop to remember an extra check.
 
+## LangGraph Security
+
+The LangGraph integration builds on the same `BaseTool` wrapping and returns an already-guarded `ToolNode`, so a compiled graph's tool-calling node enforces the policy the same way a LangChain `AgentExecutor` does.
+
 ## Small-Team AI Governance
 
 ToolBoundary is intended for developers and small teams that need local AI-agent guardrails without deploying a centralized governance platform.

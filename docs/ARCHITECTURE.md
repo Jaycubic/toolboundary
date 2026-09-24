@@ -28,7 +28,7 @@ Each decision produces a structured audit event. The core path can use Python lo
 
 ## Framework Integration
 
-The core package is dependency-free. Framework-specific adapters are optional. The repository currently documents LangChain `BaseTool` wrapping.
+The core package is dependency-free. Framework-specific adapters are optional. The repository currently documents LangChain `BaseTool` wrapping and a LangGraph `ToolNode` adapter built on top of it.
 
 ## Security Boundary
 

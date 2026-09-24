@@ -71,7 +71,7 @@ Set the environment variable your `Boundary` was configured with, and every futu
 call for that agent is denied immediately — no restart required, no code change,
 no separate dashboard to log into.
 
-## Two ways to enforce the boundary
+## Three ways to enforce the boundary
 
 ### 1. Decorator (plain Python functions)
 
@@ -115,6 +115,34 @@ check runs inside LangChain's own tool-execution path, not as a step the agent's
 reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
+
+### 3. LangGraph tools
+
+```python
+from toolboundary.integrations.langgraph import guard_tool_node
+from toolboundary import AccessMode
+
+tool_node = guard_tool_node(
+    [read_db_tool, send_email_tool, wire_transfer_tool],
+    boundary,
+    default_access_mode=AccessMode.READ_ONLY,
+    overrides={
+        "send_email_tool": {"access_mode": AccessMode.EXECUTE},
+        "wire_transfer_tool": {"access_mode": AccessMode.EXECUTE, "value_arg": "amount"},
+    },
+)
+
+graph = StateGraph(MessagesState)
+graph.add_node("tools", tool_node)
+```
+
+LangGraph tools are the same LangChain `BaseTool` objects the adapter above wraps, and
+LangGraph's prebuilt `ToolNode` invokes them through the same `.invoke()`/`.ainvoke()`
+call site. `guard_tool_node` reuses that wrapping and hands back an already-guarded
+`ToolNode`, so the *wrapped* tools — not the raw ones — are what gets compiled into
+your graph.
+
+Install with the LangGraph extra: `pip install toolboundary[langgraph]`
 
 ## What a `Boundary` can enforce
 
@@ -168,8 +196,8 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
 - **Loud by default.** Denials raise exceptions, not silent `False` returns that are
   easy to accidentally ignore.
 - **Framework-agnostic core, framework-specific adapters.** The core `Boundary` has
-  zero dependencies. Framework integrations (LangChain today; more welcome via PR) are
-  optional extras.
+  zero dependencies. Framework integrations (LangChain and LangGraph today; more
+  welcome via PR) are optional extras.
 
 ## AI Agent Security Use Cases
 
@@ -183,7 +211,7 @@ Common use cases include:
 - **Human-in-the-loop controls:** require approval for sensitive operations without introducing a separate approval service.
 - **AI security auditing:** emit structured allow, deny, and approval-required decisions to existing logging pipelines.
 - **Emergency agent shutdown:** activate an in-process or environment-variable kill switch for immediate denial of future calls.
-- **Framework integrations:** protect tools at their execution boundary through adapters such as the LangChain integration.
+- **Framework integrations:** protect tools at their execution boundary through adapters such as the LangChain and LangGraph integrations.
 
 ToolBoundary is intentionally an **application-layer control**, not a network firewall or a replacement for scoped credentials. See [Known limitations](#known-limitations--please-read-this) for the security boundary.
 
@@ -219,9 +247,9 @@ it does *not* do is more important than what it does:
 
 - **It cannot stop an agent that bypasses it entirely.** If your agent's code has any
   path that calls a tool's real implementation directly — instead of through a
-  `@guarded_tool`-wrapped function or a `guard_tool`-wrapped LangChain tool — that call
-  is not evaluated. ToolBoundary governs the doors you route through it; it is not a
-  network firewall.
+  `@guarded_tool`-wrapped function or a `guard_tool`-wrapped LangChain/LangGraph tool —
+  that call is not evaluated. ToolBoundary governs the doors you route through it; it
+  is not a network firewall.
 - **It is not a substitute for credential scoping.** If the underlying API key or
   database credential your tool uses has broader permissions than ToolBoundary's policy
   allows, a determined attacker who obtains that credential directly bypasses
@@ -261,6 +289,7 @@ ToolBoundary is published as the `toolboundary` Python package and is intended f
 ```bash
 pip install toolboundary                # core, zero dependencies
 pip install toolboundary[langchain]     # + LangChain integration
+pip install toolboundary[langgraph]     # + LangGraph integration
 ```
 
 ## Contributing
@@ -269,7 +298,7 @@ Issues and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas that would make great first contributions:
 - Redis-backed rate limiter for multi-process deployments
-- CrewAI / AutoGen / LangGraph integrations (mirroring `integrations/langchain.py`)
+- CrewAI / AutoGen integrations (mirroring `integrations/langchain.py` and `integrations/langgraph.py`)
 - A minimal read-only local dashboard that tails a `JSONLFileSink` log
 
 ## License

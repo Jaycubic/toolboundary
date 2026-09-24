@@ -13,7 +13,7 @@ git clone https://github.com/Jaycubic/toolboundary.git
 cd toolboundary
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e ".[dev,langchain]"
+pip install -e ".[dev,langchain,langgraph]"
 ```
 
 ## Running tests
@@ -49,6 +49,7 @@ src/toolboundary/
     decorators.py            # @guarded_tool
     integrations/
         langchain.py          # LangChain BaseTool wrapping
+        langgraph.py           # LangGraph ToolNode wrapping (built on langchain.py)
 ```
 
 ## Good first contributions
@@ -59,9 +60,11 @@ These are scoped, valuable, and don't require redesigning anything:
   deployments. Implement the same interface as `SlidingWindowRateLimiter`
   and `InMemoryTokenStore` and submit as an optional extra
   (`toolboundary[redis]`).
-- **CrewAI / AutoGen / LangGraph integrations** — mirror the structure of
-  `integrations/langchain.py`: wrap the framework's actual tool-execution
-  call site, not just provide a decorator the user has to remember to apply.
+- **CrewAI / AutoGen integrations** — mirror the structure of
+  `integrations/langchain.py` (see also `integrations/langgraph.py` for an
+  example of building an adapter on top of it): wrap the framework's actual
+  tool-execution call site, not just provide a decorator the user has to
+  remember to apply.
 - **A minimal local dashboard** — a single-file script that tails a
   `JSONLFileSink` log and renders a simple live view. Should have zero
   required dependencies beyond the standard library, in keeping with the

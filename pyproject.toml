@@ -17,7 +17,7 @@ keywords = [
     "llm-security", "ai-governance", "ai-guardrails", "agent-guardrails",
     "zero-trust", "least-privilege", "tool-calling", "tool-security",
     "agent-authorization", "runtime-policy", "human-in-the-loop",
-    "autonomous-agents", "langchain", "python-security"
+    "autonomous-agents", "langchain", "langgraph", "python-security"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -35,6 +35,7 @@ dependencies = []
 
 [project.optional-dependencies]
 langchain = ["langchain-core>=0.1.0"]
+langgraph = ["langgraph>=0.1.0", "langchain-core>=0.1.0"]
 # The optional network enforcement layer (toolboundary.network, toolboundary.tokens)
 # is stdlib-only and needs no extra dependency -- listed here only so
 # `pip install toolboundary[network]` is a documented, discoverable no-op that
@@ -46,6 +47,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
     "langchain-core>=0.1.0",
+    "langgraph>=0.1.0",
 ]
 
 [project.urls]
