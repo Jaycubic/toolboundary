@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "toolboundary"
 version = "1.0.0"
-description = "Runtime boundary enforcement for AI agents -- as a library, not a service."
+description = "Runtime security and policy enforcement for AI agents and LLM tool calls, with a provider-neutral authorization and evidence layer."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -13,8 +13,12 @@ authors = [
     { name = "Jofrey John Joseph", email = "jofreyjohnmrutu01@gmail.com" }
 ]
 keywords = [
-    "ai-agents", "agent-security", "llm", "langchain",
-    "ai-governance", "zero-trust", "guardrails", "tool-calling"
+    "ai-agents", "agent-security", "ai-agent-security", "llm",
+    "llm-security", "ai-governance", "ai-guardrails", "agent-guardrails",
+    "zero-trust", "least-privilege", "tool-calling", "tool-security",
+    "agent-authorization", "runtime-policy", "human-in-the-loop",
+    "autonomous-agents", "langchain", "python-security", "ai-evidence",
+    "verifiable-evidence"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -49,6 +53,7 @@ dev = [
 Homepage = "https://github.com/Jaycubic/toolboundary"
 Repository = "https://github.com/Jaycubic/toolboundary"
 Issues = "https://github.com/Jaycubic/toolboundary/issues"
+Documentation = "https://github.com/Jaycubic/toolboundary/tree/main/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/toolboundary"]
