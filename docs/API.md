@@ -23,6 +23,7 @@ Boundary(
     policy_hooks: list[PolicyHook] | None = None,
     fail_closed_on_hook_error: bool = True,
     token_issuer: TokenIssuer | None = None,
+    rate_limiter: SlidingWindowRateLimiter | None = None,
 )
 ```
 
@@ -42,6 +43,7 @@ Boundary(
 | `policy_hooks` | List of callables `(CallContext) -> str | None` for custom logic. Return a string to deny with that reason, `None` to allow. |
 | `fail_closed_on_hook_error` | If `True` (default), an exception inside a policy hook denies the call. If `False`, the hook is treated as "allow" on error. |
 | `token_issuer` | Optional `toolboundary.tokens.TokenIssuer`. Only needed if you use `check_and_authorize()` / the network enforcement layer. |
+| `rate_limiter` | Optional rate-limiter object exposing `check_and_record` / `current_count` / `reset`. Defaults to the in-memory `SlidingWindowRateLimiter`. Pass `RedisSlidingWindowRateLimiter` from `toolboundary.redis_backend` for multi-replica deployments. |
 
 ### `Boundary.check(...)`
 
@@ -266,8 +268,34 @@ Run `python -m toolboundary.benchmarks` (see `examples/benchmark.py`) to reprodu
 ### Multi-process deployments
 
 Both `InMemoryTokenStore` (single-use tracking) and the in-memory rate
-limiter are per-process by default. For multi-replica deployments, supply
-a shared backing store (Redis is a natural fit for both — `SETNX` with
-TTL for single-use tracking, `INCR`/`EXPIRE` for rate limiting). This is
-one of the best first open-source contributions to this project — see
-`CONTRIBUTING.md`.
+limiter are per-process by default. For multi-replica deployments, install
+`toolboundary[redis]` and supply the shared backends:
+
+```python
+from toolboundary.redis_backend import RedisSlidingWindowRateLimiter, RedisTokenStore
+
+limiter = RedisSlidingWindowRateLimiter(redis_url="redis://localhost:6379/0")
+store = RedisTokenStore(redis_url="redis://localhost:6379/0")
+
+boundary = Boundary(..., rate_limiter=limiter)
+enforcer = NetworkEnforcer(issuer, routes, token_store=store)
+```
+
+Both classes accept either `redis_url` or an injected `client` (any
+redis-py-compatible client). They fail closed on Redis outages by default
+— see the module docstring in `toolboundary.redis_backend` for why.
+
+---
+
+## `toolboundary.redis_backend` (optional)
+
+Requires `pip install toolboundary[redis]`. Not imported by the core
+package, so the default install stays dependency-free.
+
+| Class | Drop-in for | Notes |
+|---|---|---|
+| `RedisSlidingWindowRateLimiter` | `SlidingWindowRateLimiter` / `Boundary(rate_limiter=...)` | Sorted-set sliding window; Lua-atomic check+record across replicas. |
+| `RedisTokenStore` | `InMemoryTokenStore` / `NetworkEnforcer(token_store=...)` | `SET NX` + TTL for single-use tokens. |
+
+Both take `redis_url=` or `client=`, plus optional `key_prefix=` and
+`fail_closed=` (default `True`).

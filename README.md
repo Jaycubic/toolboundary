@@ -330,8 +330,10 @@ it does *not* do is more important than what it does:
   platforms — ToolBoundary is intentionally not trying to be that.
 - **The in-memory rate limiter is per-process.** If you run multiple replicas of your
   agent, each process has its own rate-limit counters unless you supply a shared
-  backing store (see `Boundary`'s internals / open an issue if you need this — a
-  Redis-backed limiter is a natural community contribution).
+  backend. Install `toolboundary[redis]` and pass
+  `RedisSlidingWindowRateLimiter` / `RedisTokenStore` from
+  `toolboundary.redis_backend` into `Boundary(rate_limiter=...)` and
+  `NetworkEnforcer(token_store=...)`.
 - **Provider evidence is only as trustworthy as the provider.** An SDK-reported result
   does not itself prove that an external side effect occurred — it proves the SDK
   reported it. See the provider documentation for what guarantees each provider makes.
@@ -361,6 +363,7 @@ ToolBoundary is published as the `toolboundary` Python package and is intended f
 ```bash
 pip install toolboundary                # core, zero dependencies
 pip install toolboundary[langchain]     # + LangChain integration
+pip install toolboundary[redis]         # + shared Redis rate limiter / token store
 ```
 
 ## Contributing
@@ -369,7 +372,6 @@ Issues and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas that would make great first contributions:
 - Custom `EvidenceProvider` implementations for popular platforms
-- Redis-backed rate limiter for multi-process deployments
 - CrewAI / AutoGen / LangGraph integrations (mirroring `integrations/langchain.py`)
 - A minimal read-only local dashboard that tails a `JSONLFileSink` log
 
