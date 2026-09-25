@@ -45,7 +45,6 @@ from .permissions import ToolPermission
 from .provider import (
     AuthorizationContext,
     EvidenceProvider,
-    ExecutionRecord,
     FrozenToolCall,
     LocalDecision,
     ProviderGrant,
