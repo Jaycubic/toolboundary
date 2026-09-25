@@ -9,8 +9,9 @@ dependency-free on purpose -- ToolBoundary must add near-zero latency and
 must not require Redis or a database to function for the common case of
 a single-process agent.
 
-For multi-process deployments, swap this out via the `store` hook in
-Boundary (see boundary.py) -- e.g. backing it with Redis INCR/EXPIRE.
+For multi-process deployments, pass a shared backend via
+`Boundary(rate_limiter=...)` -- e.g. `RedisSlidingWindowRateLimiter`
+from `toolboundary.redis_backend` (optional `toolboundary[redis]` extra).
 """
 
 from __future__ import annotations

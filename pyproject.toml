@@ -13,8 +13,11 @@ authors = [
     { name = "Jofrey John Joseph", email = "jofreyjohnmrutu01@gmail.com" }
 ]
 keywords = [
-    "ai-agents", "agent-security", "llm", "langchain",
-    "ai-governance", "zero-trust", "guardrails", "tool-calling"
+    "ai-agents", "agent-security", "ai-agent-security", "llm",
+    "llm-security", "ai-governance", "ai-guardrails", "agent-guardrails",
+    "zero-trust", "least-privilege", "tool-calling", "tool-security",
+    "agent-authorization", "runtime-policy", "human-in-the-loop",
+    "autonomous-agents", "langchain", "python-security"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -37,18 +40,24 @@ langchain = ["langchain-core>=0.1.0"]
 # `pip install toolboundary[network]` is a documented, discoverable no-op that
 # reads naturally alongside the langchain extra.
 network = []
+# Shared rate-limiter / token-store backends for multi-process deployments.
+# Core stays dependency-free; only `toolboundary.redis_backend` imports redis.
+redis = ["redis>=5.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "mypy>=1.8",
     "langchain-core>=0.1.0",
+    "redis>=5.0",
+    "fakeredis[lua]>=2.21",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Jaycubic/toolboundary"
 Repository = "https://github.com/Jaycubic/toolboundary"
 Issues = "https://github.com/Jaycubic/toolboundary/issues"
+Documentation = "https://github.com/Jaycubic/toolboundary/tree/main/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/toolboundary"]
