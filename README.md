@@ -2,9 +2,11 @@
 
 **Runtime boundary enforcement for AI agents — as a library, not a service.**
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/project/toolboundary/)
+[![PyPI](https://img.shields.io/badge/pypi-v1.0.0-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-86%20passed-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](tests/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
 tool: **"is this exact call allowed, right now?"**
@@ -15,6 +17,24 @@ Your policy is plain Python, version-controlled with the rest of your code.
 ```bash
 pip install toolboundary
 ```
+
+## What's new in v1.0.0
+
+ToolBoundary v1.0.0 introduces a **provider-neutral external authorization and evidence layer** — the foundation for integrating external authorization providers (like [AgentKey](https://github.com/AgentKey)) while keeping ToolBoundary as the local enforcement authority.
+
+### Key additions
+
+- **`EvidenceProvider` protocol** — a clean interface any external provider can implement to add authorization and execution evidence without coupling to a specific vendor
+- **`authorize_call()` / `record_execution()`** — a centralized orchestration flow that freezes the exact tool call, computes a cryptographic call digest (SHA-256 of canonical JSON), consults an optional provider, and records execution evidence
+- **Observe / Enforce modes** — `ProviderMode.OBSERVE` logs provider decisions without blocking; `ProviderMode.ENFORCE` fails closed on provider denial or unavailability
+- **`evaluate()` method** — returns a structured `LocalDecision` instead of raise-on-deny, enabling richer programmatic integration
+- **Deterministic canonicalization** — equivalent dictionaries (`{"a":1,"b":2}` vs `{"b":2,"a":1}`) always produce identical digests, binding authorization to the exact call
+- **Replay prevention** — consumed authorizations cannot be reused for a second dispatch
+- **Post-dispatch resilience** — if a provider fails to record execution evidence, the local record is preserved
+
+### Core invariant
+
+> **ToolBoundary remains the local enforcement authority.** An external provider can add a stricter gate or external evidence, but it can **never** turn a local deny into an allow.
 
 ## Why this exists
 
@@ -114,6 +134,75 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
+## External authorization providers (new in v1.0.0)
+
+ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
+
+### Without a provider (default — unchanged from v0.1.0)
+
+```python
+boundary = Boundary(
+    agent_name="support-agent",
+    ...
+)
+# Works exactly as before. No external service needed.
+```
+
+### With a provider (observe mode)
+
+```python
+from toolboundary import Boundary, ProviderMode
+
+boundary = Boundary(
+    agent_name="support-agent",
+    ...,
+    provider=my_provider,
+    provider_mode=ProviderMode.OBSERVE,
+)
+# Provider decisions are logged but don't block locally-allowed actions.
+# Provider unavailability is gracefully degraded.
+```
+
+### With a provider (enforce mode)
+
+```python
+boundary = Boundary(
+    agent_name="support-agent",
+    ...,
+    provider=my_provider,
+    provider_mode=ProviderMode.ENFORCE,
+)
+# Provider must explicitly allow the action.
+# Provider denial or unavailability blocks execution before dispatch.
+```
+
+### Implementing a custom provider
+
+Any class that implements the `EvidenceProvider` protocol can serve as a provider:
+
+```python
+from toolboundary import EvidenceProvider, FrozenToolCall, LocalDecision, ProviderGrant
+from toolboundary import ExecutionRecord, ProviderReceipt
+
+class MyProvider:
+    def authorize(self, call: FrozenToolCall, local: LocalDecision) -> ProviderGrant:
+        # Your authorization logic here
+        return ProviderGrant(allowed=True, provider="my-provider")
+
+    def record(self, grant: ProviderGrant, execution: ExecutionRecord) -> ProviderReceipt:
+        # Your evidence recording logic here
+        return ProviderReceipt(recorded=True, provider="my-provider")
+```
+
+### Authorization flow
+
+```
+Local policy check → DENY? → stop (provider never consulted)
+                   → ALLOW? → freeze call → compute digest → provider.authorize()
+                                                            → execute exact call
+                                                            → provider.record()
+```
+
 ## What a `Boundary` can enforce
 
 | Control | Example |
@@ -129,6 +218,8 @@ Install with the LangChain extra: `pip install toolboundary[langchain]`
 | Environment restriction | `allowed_environments=frozenset({"DEV", "TEST"})` |
 | Emergency kill switch | in-process flag or environment variable |
 | Custom policy logic | `policy_hooks=[my_custom_check]` |
+| External authorization provider | `provider=my_provider, provider_mode=ProviderMode.ENFORCE` |
+| Exact-call binding with cryptographic digest | Automatic when a provider is configured |
 
 Full field reference: see [`docs/API.md`](docs/API.md).
 
@@ -149,6 +240,9 @@ boundary = Boundary(
 )
 ```
 
+When a provider is configured, audit events automatically include evidence metadata:
+call digests, provider decisions, authorization IDs, and result digests.
+
 A `WebhookSink` is also included if you want to forward events to a self-hosted
 dashboard or a centralized governance platform. Audit delivery is always best-effort —
 a network hiccup in your audit pipeline can never block or crash your agent, because
@@ -168,6 +262,9 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
 - **Framework-agnostic core, framework-specific adapters.** The core `Boundary` has
   zero dependencies. Framework integrations (LangChain today; more welcome via PR) are
   optional extras.
+- **Local authority, optional extension.** External providers add evidence and stricter
+  gates but never override local policy. ToolBoundary works identically with or without
+  a provider configured.
 
 ## Known limitations — please read this
 
@@ -192,6 +289,9 @@ it does *not* do is more important than what it does:
   agent, each process has its own rate-limit counters unless you supply a shared
   backing store (see `Boundary`'s internals / open an issue if you need this — a
   Redis-backed limiter is a natural community contribution).
+- **Provider evidence is only as trustworthy as the provider.** An SDK-reported result
+  does not itself prove that an external side effect occurred — it proves the SDK
+  reported it. See the provider documentation for what guarantees each provider makes.
 
 If your threat model requires guaranteeing that a compromised agent *physically
 cannot* reach a tool's network endpoint except through an approved path, you need a
@@ -210,6 +310,7 @@ pip install toolboundary[langchain]     # + LangChain integration
 Issues and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas that would make great first contributions:
+- Custom `EvidenceProvider` implementations for popular platforms
 - Redis-backed rate limiter for multi-process deployments
 - CrewAI / AutoGen / LangGraph integrations (mirroring `integrations/langchain.py`)
 - A minimal read-only local dashboard that tails a `JSONLFileSink` log

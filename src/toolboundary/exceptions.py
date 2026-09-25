@@ -86,3 +86,58 @@ class ApprovalRequired(ToolBoundaryError):
 
 class ConfigurationError(ToolBoundaryError):
     """Raised when a Boundary or Policy is misconfigured (fails fast at setup time)."""
+
+
+class ProviderAuthorizationDenied(ToolBoundaryError):
+    """Raised when an external provider explicitly denies a locally-allowed action.
+
+    This is distinct from BoundaryViolation: the local policy allowed the
+    action, but the external provider denied it in enforce mode.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        agent_name: str,
+        tool_name: str,
+        operation: str | None = None,
+        provider: str | None = None,
+        reason: str | None = None,
+    ) -> None:
+        self.agent_name = agent_name
+        self.tool_name = tool_name
+        self.operation = operation
+        self.provider = provider
+        self.reason = reason
+        super().__init__(message)
+
+
+class ProviderUnavailable(ToolBoundaryError):
+    """Raised when an external provider cannot be reached in enforce mode.
+
+    In observe mode, provider unavailability is logged but does not block
+    execution. In enforce mode, it blocks before dispatch (fail closed).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        agent_name: str,
+        tool_name: str,
+        operation: str | None = None,
+        provider: str | None = None,
+    ) -> None:
+        self.agent_name = agent_name
+        self.tool_name = tool_name
+        self.operation = operation
+        self.provider = provider
+        super().__init__(message)
+
+
+class AuthorizationConsumed(ToolBoundaryError):
+    """Raised when attempting to use an authorization that has already been consumed.
+
+    A consumed provider authorization must not authorize a second dispatch.
+    """

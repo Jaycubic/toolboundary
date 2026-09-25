@@ -34,6 +34,7 @@ Quickstart
 
 For a decorator-based approach, see `toolboundary.guarded_tool`.
 For LangChain, see `toolboundary.integrations.langchain`.
+For external authorization providers, see `toolboundary.provider`.
 """
 
 from .audit import AuditEvent, AuditTrail, JSONLFileSink, LoggingSink, WebhookSink
@@ -42,15 +43,28 @@ from .decorators import guarded_tool
 from .enums import AccessMode, AutonomyLevel, DecisionType, ViolationReason
 from .exceptions import (
     ApprovalRequired,
+    AuthorizationConsumed,
     BoundaryViolation,
     ConfigurationError,
     KillSwitchActive,
+    ProviderAuthorizationDenied,
+    ProviderUnavailable,
     RateLimitExceeded,
     ToolBoundaryError,
 )
 from .permissions import ToolPermission
+from .provider import (
+    AuthorizationContext,
+    EvidenceProvider,
+    ExecutionRecord,
+    FrozenToolCall,
+    LocalDecision,
+    ProviderGrant,
+    ProviderMode,
+    ProviderReceipt,
+)
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "__version__",
@@ -71,10 +85,22 @@ __all__ = [
     "RateLimitExceeded",
     "ApprovalRequired",
     "ConfigurationError",
+    "ProviderAuthorizationDenied",
+    "ProviderUnavailable",
+    "AuthorizationConsumed",
     # audit
     "AuditTrail",
     "AuditEvent",
     "LoggingSink",
     "JSONLFileSink",
     "WebhookSink",
+    # provider (provider-neutral public types)
+    "EvidenceProvider",
+    "ExecutionRecord",
+    "FrozenToolCall",
+    "LocalDecision",
+    "ProviderGrant",
+    "ProviderMode",
+    "ProviderReceipt",
+    "AuthorizationContext",
 ]

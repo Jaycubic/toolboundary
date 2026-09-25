@@ -24,10 +24,16 @@ that ignores its LangChain tool list entirely is out of scope for an
 in-process library). It closes the most common one: the agent's own
 tool-calling loop invoking a permitted-looking tool for an
 unpermitted action.
+
+When a provider is configured on the boundary, the LangChain adapter uses
+the same centralized ``authorize_call()`` / ``record_execution()``
+orchestration as ``@guarded_tool``, preventing framework-specific
+integrations from drifting apart.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any, Optional, Type  # noqa: UP035
 
 from ..boundary import Boundary
@@ -52,6 +58,10 @@ def guard_tool(
     access_mode: AccessMode = AccessMode.READ_ONLY,
     value_arg: str | None = None,
     record_count_arg: str | None = None,
+    resource: str | None = None,
+    tool_version: str | None = None,
+    schema_hash: str | None = None,
+    manifest_hash: str | None = None,
 ) -> BaseTool:
     """
     Return a new BaseTool that enforces `boundary` before delegating to `tool`.
@@ -79,6 +89,7 @@ def guard_tool(
         return_direct: bool = getattr(tool, "return_direct", False)
 
         def _evaluate(self, kwargs: dict[str, Any]) -> None:
+            """Simple check path (no provider)."""
             resolved_value = kwargs.get(value_arg) if value_arg else None
             resolved_records = kwargs.get(record_count_arg) if record_count_arg else None
             boundary.check(
@@ -90,17 +101,81 @@ def guard_tool(
                 metadata={"langchain_tool": tool.name},
             )
 
+        def _authorize(self, kwargs: dict[str, Any]) -> Any:
+            """Provider-aware authorization path."""
+            resolved_value = kwargs.get(value_arg) if value_arg else None
+            resolved_records = kwargs.get(record_count_arg) if record_count_arg else None
+            return boundary.authorize_call(
+                tool_name=resolved_name,
+                operation=operation,
+                access_mode=access_mode,
+                arguments=dict(kwargs),
+                value=resolved_value,
+                record_count=resolved_records,
+                metadata={"langchain_tool": tool.name},
+                resource=resource,
+                tool_version=tool_version,
+                schema_hash=schema_hash,
+                manifest_hash=manifest_hash,
+            )
+
         def _run(self, *args: Any, **kwargs: Any) -> Any:
-            self._evaluate(kwargs)
-            return tool._run(*args, **kwargs)  # noqa: SLF001
+            if boundary._provider is not None:  # noqa: SLF001
+                authorization = self._authorize(kwargs)
+                started_at = time.time()
+                error: BaseException | None = None
+                result: Any = None
+                try:
+                    result = tool._run(*args, **kwargs)  # noqa: SLF001
+                except BaseException as exc:
+                    error = exc
+                    raise
+                finally:
+                    finished_at = time.time()
+                    boundary.record_execution(
+                        authorization,
+                        result=result,
+                        error=error,
+                        started_at=started_at,
+                        finished_at=finished_at,
+                    )
+                return result
+            else:
+                self._evaluate(kwargs)
+                return tool._run(*args, **kwargs)  # noqa: SLF001
 
         async def _arun(self, *args: Any, **kwargs: Any) -> Any:
-            self._evaluate(kwargs)
-            arun = getattr(tool, "_arun", None)
-            if arun is not None:
-                return await arun(*args, **kwargs)
-            # Fall back to sync _run if the wrapped tool has no async implementation
-            return tool._run(*args, **kwargs)  # noqa: SLF001
+            if boundary._provider is not None:  # noqa: SLF001
+                authorization = self._authorize(kwargs)
+                started_at = time.time()
+                error: BaseException | None = None
+                result: Any = None
+                try:
+                    arun = getattr(tool, "_arun", None)
+                    if arun is not None:
+                        result = await arun(*args, **kwargs)
+                    else:
+                        result = tool._run(*args, **kwargs)  # noqa: SLF001
+                except BaseException as exc:
+                    error = exc
+                    raise
+                finally:
+                    finished_at = time.time()
+                    boundary.record_execution(
+                        authorization,
+                        result=result,
+                        error=error,
+                        started_at=started_at,
+                        finished_at=finished_at,
+                    )
+                return result
+            else:
+                self._evaluate(kwargs)
+                arun = getattr(tool, "_arun", None)
+                if arun is not None:
+                    return await arun(*args, **kwargs)
+                # Fall back to sync _run if the wrapped tool has no async implementation
+                return tool._run(*args, **kwargs)  # noqa: SLF001
 
     return _GuardedTool()
 

@@ -9,12 +9,20 @@ This is the mechanism that closes the "agent forgets to check permission"
 gap: once a function is decorated, calling it *is* calling through
 ToolBoundary -- there is no code path to the real implementation that
 doesn't pass through the boundary check first.
+
+When a provider is configured on the boundary, `@guarded_tool` uses the
+``authorize_call()`` / ``record_execution()`` orchestration so that:
+- The exact resolved arguments used for authorization are the same ones
+  used for execution.
+- Execution evidence is recorded after dispatch (success or failure).
+- Provider semantics (observe/enforce) are respected transparently.
 """
 
 from __future__ import annotations
 
 import functools
 import inspect
+import time
 from typing import Any, Callable, TypeVar
 
 from .boundary import Boundary
@@ -32,6 +40,10 @@ def guarded_tool(
     value_arg: str | None = None,
     record_count_arg: str | None = None,
     correlation_id_arg: str | None = None,
+    resource: str | None = None,
+    tool_version: str | None = None,
+    schema_hash: str | None = None,
+    manifest_hash: str | None = None,
 ) -> Callable[[F], F]:
     """
     Decorate a function so every call is evaluated against `boundary` first.
@@ -56,6 +68,9 @@ def guarded_tool(
         write, e.g., `@guarded_tool(boundary, value_arg="amount")` and have
         ToolBoundary automatically enforce max_value against whatever
         `amount` is passed at call time.
+    resource / tool_version / schema_hash / manifest_hash:
+        Optional provider-binding fields included in the FrozenToolCall
+        when a provider is configured.
 
     Example
     -------
@@ -86,17 +101,56 @@ def guarded_tool(
                 call_kwargs.get(correlation_id_arg) if correlation_id_arg else None
             )
 
-            boundary.check(
-                resolved_tool_name,
-                operation=resolved_operation,
-                access_mode=access_mode,
-                value=resolved_value,
-                record_count=resolved_record_count,
-                correlation_id=resolved_correlation_id,
-                metadata={"args": _safe_repr(kwargs)},
-            )
+            # Use the full authorize_call path when a provider is configured,
+            # otherwise fall back to the simple check() for backward compat.
+            if boundary._provider is not None:  # noqa: SLF001
+                authorization = boundary.authorize_call(
+                    tool_name=resolved_tool_name,
+                    operation=resolved_operation,
+                    access_mode=access_mode,
+                    arguments=dict(call_kwargs),
+                    value=resolved_value,
+                    record_count=resolved_record_count,
+                    correlation_id=resolved_correlation_id,
+                    metadata={"args": _safe_repr(kwargs)},
+                    resource=resource,
+                    tool_version=tool_version,
+                    schema_hash=schema_hash,
+                    manifest_hash=manifest_hash,
+                )
 
-            return func(*args, **kwargs)
+                started_at = time.time()
+                error: BaseException | None = None
+                result: Any = None
+                try:
+                    result = func(*args, **kwargs)
+                except BaseException as exc:
+                    error = exc
+                    raise
+                finally:
+                    finished_at = time.time()
+                    boundary.record_execution(
+                        authorization,
+                        result=result,
+                        error=error,
+                        started_at=started_at,
+                        finished_at=finished_at,
+                        correlation_id=resolved_correlation_id,
+                    )
+                return result
+            else:
+                # No provider: use the simple check() path.
+                boundary.check(
+                    resolved_tool_name,
+                    operation=resolved_operation,
+                    access_mode=access_mode,
+                    value=resolved_value,
+                    record_count=resolved_record_count,
+                    correlation_id=resolved_correlation_id,
+                    metadata={"args": _safe_repr(kwargs)},
+                )
+
+                return func(*args, **kwargs)
 
         wrapper.__toolboundary_boundary__ = boundary  # type: ignore[attr-defined]
         wrapper.__toolboundary_tool_name__ = resolved_tool_name  # type: ignore[attr-defined]

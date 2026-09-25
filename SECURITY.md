@@ -2,8 +2,15 @@
 
 ToolBoundary is a security-relevant library. If you find a vulnerability —
 especially anything that would let a denied action be allowed, a token be
-forged or replayed, or the kill switch be ignored — please report it
-privately rather than opening a public issue.
+forged or replayed, a provider authorization be bypassed, or the kill switch
+be ignored — please report it privately rather than opening a public issue.
+
+## Supported versions
+
+| Version | Supported |
+|---------|-----------|
+| 1.0.x   | ✅ Active (current stable release) |
+| < 1.0   | ❌ No longer supported |
 
 ## Reporting
 
@@ -24,9 +31,15 @@ highest priority.
 
 In scope:
 - The core `Boundary` decision engine (`toolboundary.boundary`)
+- The provider authorization flow (`toolboundary.provider`, `toolboundary.evidence`)
+- The `EvidenceProvider` protocol and its interaction with local policy
 - Token issuance/verification (`toolboundary.tokens`)
 - The network enforcement proxy (`toolboundary.network`)
+- The `@guarded_tool` decorator (`toolboundary.decorators`)
 - The LangChain integration (`toolboundary.integrations.langchain`)
+- Any scenario where a local DENY could be turned into an ALLOW by an
+  external provider — this is explicitly prohibited by the architecture
+  and would be treated as a critical vulnerability
 
 Out of scope (see README "Known Limitations"):
 - An agent bypassing ToolBoundary entirely by never calling through it —
@@ -37,3 +50,7 @@ Out of scope (see README "Known Limitations"):
   from a vulnerability report about ToolBoundary's own logic being incorrect.
 - Vulnerabilities in third-party dependencies (report those upstream;
   langchain-core is the only optional one currently).
+- Provider-side vulnerabilities — if an `EvidenceProvider` implementation
+  (e.g. AgentKey) has a bug, report it to the provider's maintainers.
+  ToolBoundary's responsibility ends at enforcing the local policy and
+  correctly invoking the provider protocol.
