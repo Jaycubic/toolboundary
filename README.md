@@ -1,6 +1,6 @@
 # ToolBoundary
 
-**Runtime boundary enforcement for AI agents — as a library, not a service.**
+**Runtime security and policy enforcement for AI agents and LLM tool calls — local-first, provider-neutral, and deployable as a Python library.**
 
 [![PyPI](https://img.shields.io/badge/pypi-v1.0.0-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -20,7 +20,7 @@ pip install toolboundary
 
 ## What's new in v1.0.0
 
-ToolBoundary v1.0.0 introduces a **provider-neutral external authorization and evidence layer** — the foundation for integrating external authorization providers (like [AgentKey](https://github.com/AgentKey)) while keeping ToolBoundary as the local enforcement authority.
+ToolBoundary v1.0.0 introduces a **provider-neutral authorization and evidence layer** for AI-agent tool execution. It keeps ToolBoundary as the local enforcement authority while allowing optional external providers — including [AgentKey](https://agentkey.us/) — to add external authorization, approval, and verifiable evidence.
 
 ### Key additions
 
@@ -38,15 +38,9 @@ ToolBoundary v1.0.0 introduces a **provider-neutral external authorization and e
 
 ## Why this exists
 
-Enterprise AI-governance platforms (agent registries, policy engines, approval
-dashboards) make sense when a large organization has dozens of AI agents built by
-different teams and needs a compliance layer to track all of them. That's real
-infrastructure for a real problem — but it's disproportionate for the much more common
-case: **one developer or a small team building one to a handful of agents**, who just
-need to make sure a tool-calling agent can't do something catastrophic.
+AI agents need a runtime security boundary between model-generated intent and real-world tool execution. ToolBoundary is designed to provide that boundary locally, without requiring a web application, database, gateway, or subscription.
 
-ToolBoundary is built for that second case. It costs nothing, requires no
-infrastructure, and takes minutes to add to an existing agent.
+For teams that need centralized authorization, approvals, or independently verifiable evidence, the same local boundary can optionally integrate with an external provider. This keeps the standalone library useful on its own while leaving room for centralized security infrastructure when the deployment requires it.
 
 ## Quickstart
 
@@ -134,6 +128,7 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
+<<<<<<< HEAD
 ### 3. CrewAI tools
 
 ```python
@@ -166,8 +161,13 @@ Both synchronous and asynchronous CrewAI tool execution paths are supported.
 Install with the CrewAI extra: `pip install toolboundary[crewai]`
 
 ## External authorization providers (new in v1.0.0)
+=======
+## External authorization & evidence providers
+>>>>>>> upstream/main
 
-ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
+ToolBoundary can optionally consult an external authorization or evidence provider before dispatching a tool call. The provider adds a second gate and/or evidence layer — it can never weaken a local policy decision.
+
+One example is [AgentKey](https://agentkey.us/), which can provide external authorization and verifiable evidence around agent actions. ToolBoundary does not require AgentKey and remains fully functional in local-only mode.
 
 ### Without a provider (default — unchanged from v0.1.0)
 
@@ -224,6 +224,12 @@ class MyProvider:
         # Your evidence recording logic here
         return ProviderReceipt(recorded=True, provider="my-provider")
 ```
+
+### AgentKey interoperability
+
+ToolBoundary's provider-neutral interface is designed so an external system such as [AgentKey](https://agentkey.us/) can plug into the same authorization lifecycle without becoming a dependency of the core library. The local ToolBoundary decision remains authoritative: a local deny is final.
+
+The integration boundary is intentionally provider-neutral so other authorization or evidence systems can implement the same contract.
 
 ### Authorization flow
 
@@ -293,9 +299,15 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
 - **Framework-agnostic core, framework-specific adapters.** The core `Boundary` has
   zero dependencies. Framework integrations (LangChain today; more welcome via PR) are
   optional extras.
-- **Local authority, optional extension.** External providers add evidence and stricter
-  gates but never override local policy. ToolBoundary works identically with or without
-  a provider configured.
+- **Local authority, optional extension.** External providers can add authorization,
+  approvals, or evidence, but never override local policy. ToolBoundary works identically
+  in local-only mode.
+
+## AI Agent Security Keywords
+
+AI agent security, LLM security, tool-calling security, AI agent guardrails, runtime policy enforcement, agent authorization, least-privilege AI agents, human-in-the-loop approval, verifiable AI action evidence, tool execution security, LangChain security, Python AI security, autonomous agent controls, and application-layer AI security.
+
+---
 
 ## Known limitations — please read this
 

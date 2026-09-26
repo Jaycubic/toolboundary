@@ -36,7 +36,6 @@ from toolboundary import (
 )
 from toolboundary.evidence import call_digest, canonicalize, freeze_with_digest, sha256
 from toolboundary.provider import (
-    AuthorizationContext,
     ExecutionRecord,
     FrozenToolCall,
     LocalDecision,
@@ -44,7 +43,6 @@ from toolboundary.provider import (
     ProviderMode,
     ProviderReceipt,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mock providers
@@ -577,6 +575,8 @@ class TestFullOrchestratedPath:
             started_at=time.time(),
             finished_at=time.time(),
         )
+
+        assert receipt.recorded is True
 
         assert len(spy.record_calls) == 1
         _, execution = spy.record_calls[0]

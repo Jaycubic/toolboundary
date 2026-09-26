@@ -10,6 +10,11 @@ from toolboundary import (
     ToolPermission,
     guarded_tool,
 )
+from toolboundary.provider import (
+    ProviderGrant,
+    ProviderMode,
+    ProviderReceipt,
+)
 
 
 def test_guarded_function_executes_when_allowed():
@@ -73,15 +78,6 @@ def test_value_arg_is_enforced_from_call_kwargs():
 # ---------------------------------------------------------------------------
 # Provider-aware decorator tests
 # ---------------------------------------------------------------------------
-
-from toolboundary.provider import (
-    ExecutionRecord,
-    FrozenToolCall,
-    LocalDecision,
-    ProviderGrant,
-    ProviderMode,
-    ProviderReceipt,
-)
 
 
 class _SpyProvider:
