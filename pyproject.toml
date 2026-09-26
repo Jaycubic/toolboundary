@@ -36,6 +36,7 @@ dependencies = []
 
 [project.optional-dependencies]
 langchain = ["langchain-core>=0.1.0"]
+crewai = ["crewai>=1.15.22"]
 # The optional network enforcement layer (toolboundary.network, toolboundary.tokens)
 # is stdlib-only and needs no extra dependency -- listed here only so
 # `pip install toolboundary[network]` is a documented, discoverable no-op that
