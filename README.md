@@ -2,7 +2,7 @@
 
 **Runtime boundary enforcement for AI agents — as a library, not a service.**
 
-[![PyPI](https://img.shields.io/badge/pypi-v1.0.0-blue)](https://pypi.org/project/toolboundary/)
+[![PyPI](https://img.shields.io/badge/pypi-v1.0.1%20%28upcoming%29-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-86%20passed-brightgreen)](tests/)
@@ -18,9 +18,9 @@ Your policy is plain Python, version-controlled with the rest of your code.
 pip install toolboundary
 ```
 
-## What's new in v1.0.0
+## What's new in v1.0.1
 
-ToolBoundary v1.0.0 introduces a **provider-neutral external authorization and evidence layer** — the foundation for integrating external authorization providers (like [AgentKey](https://github.com/AgentKey)) while keeping ToolBoundary as the local enforcement authority.
+ToolBoundary v1.0.1 introduces a **provider-neutral external authorization and evidence layer** — the foundation for integrating external authorization providers (like [AgentKey](https://github.com/AgentKey)) while keeping ToolBoundary as the local enforcement authority.
 
 ### Key additions
 
@@ -134,7 +134,7 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
-## External authorization providers (new in v1.0.0)
+## External authorization providers (v1.0.1)
 
 ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
 
@@ -196,7 +196,7 @@ class MyProvider:
 
 ### AgentKey integration
 
-[AgentKey](https://github.com/AgentKey) is the first concrete external provider integration. ToolBoundary ships a ready-to-use `AgentKeyProvider` adapter:
+[AgentKey](https://agentkey.us/) is the first concrete external provider integration. ToolBoundary includes an `AgentKeyProvider` adapter implementing the provider-neutral contract:
 
 ```python
 from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode, ProviderMode
@@ -222,7 +222,7 @@ Key points:
 - **Provider integration adds external authorization and cryptographic evidence** — it does not replace local policy.
 - **The core package has no AgentKey dependency.** The adapter lives in `toolboundary.integrations.agentkey`.
 
-See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for a complete runnable demo.
+See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for a complete runnable demo and [`tests/test_agentkey_integration.py`](tests/test_agentkey_integration.py) for the end-to-end contract coverage.
 
 ### Authorization flow
 
