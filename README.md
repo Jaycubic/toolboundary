@@ -194,6 +194,36 @@ class MyProvider:
         return ProviderReceipt(recorded=True, provider="my-provider")
 ```
 
+### AgentKey integration
+
+[AgentKey](https://github.com/AgentKey) is the first concrete external provider integration. ToolBoundary ships a ready-to-use `AgentKeyProvider` adapter:
+
+```python
+from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode, ProviderMode
+from toolboundary.integrations.agentkey import AgentKeyProvider
+
+provider = AgentKeyProvider(client=your_agentkey_client)
+
+boundary = Boundary(
+    agent_name="support-agent",
+    autonomy=AutonomyLevel.AUTONOMOUS,
+    permissions=[
+        ToolPermission("read_ticket", access_mode=AccessMode.READ_ONLY),
+    ],
+    provider=provider,
+    provider_mode=ProviderMode.ENFORCE,
+)
+```
+
+Key points:
+
+- **AgentKey is optional.** The core `pip install toolboundary` works without it.
+- **ToolBoundary remains the local enforcement authority.** Local deny is final — AgentKey cannot override it.
+- **Provider integration adds external authorization and cryptographic evidence** — it does not replace local policy.
+- **The core package has no AgentKey dependency.** The adapter lives in `toolboundary.integrations.agentkey`.
+
+See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for a complete runnable demo.
+
 ### Authorization flow
 
 ```
