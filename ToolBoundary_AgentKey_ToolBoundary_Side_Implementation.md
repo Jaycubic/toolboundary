@@ -1,3 +1,5 @@
+> **Status:** Implemented on `main` for the v1.0.2 release. This document is retained as the implementation handoff/reference for the ToolBoundary side of the AgentKey integration.
+>
 # ToolBoundary × AgentKey — ToolBoundary-Side Implementation
 
 ## Objective
