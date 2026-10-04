@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/badge/pypi-v1.0.2-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-86%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-122%20passed-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](tests/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
