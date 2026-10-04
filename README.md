@@ -2,7 +2,7 @@
 
 **Runtime boundary enforcement for AI agents — as a library, not a service.**
 
-[![PyPI](https://img.shields.io/badge/pypi-v1.0.1%20%28upcoming%29-blue)](https://pypi.org/project/toolboundary/)
+[![PyPI](https://img.shields.io/badge/pypi-v1.0.2-blue)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-86%20passed-brightgreen)](tests/)
@@ -18,12 +18,13 @@ Your policy is plain Python, version-controlled with the rest of your code.
 pip install toolboundary
 ```
 
-## What's new in v1.0.1
+## What's new in v1.0.2
 
-ToolBoundary v1.0.1 introduces a **provider-neutral external authorization and evidence layer** — the foundation for integrating external authorization providers (like [AgentKey](https://github.com/AgentKey)) while keeping ToolBoundary as the local enforcement authority.
+ToolBoundary v1.0.2 consolidates the provider-neutral authorization/evidence architecture introduced in v1.0.0 with the ToolBoundary-side AgentKey reference integration and an optional Redis backend for shared rate limiting and token storage, while keeping ToolBoundary as the local enforcement authority.
 
 ### Key additions
 
+- **Optional Redis shared backends** — `RedisSlidingWindowRateLimiter` and `RedisTokenStore` for multi-process and multi-replica deployments, available through `toolboundary[redis]` without changing the in-memory default
 - **`EvidenceProvider` protocol** — a clean interface any external provider can implement to add authorization and execution evidence without coupling to a specific vendor
 - **Provider-aware execution lifecycle** — `authorize_call()` / `record_execution()` freeze the exact tool call, compute the current ToolBoundary call digest, consult an optional provider, and record execution evidence
 - **Observe / Enforce modes** — `ProviderMode.OBSERVE` logs provider decisions without blocking; `ProviderMode.ENFORCE` fails closed on provider denial or unavailability
@@ -134,7 +135,7 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
-## External authorization providers (v1.0.1)
+## External authorization providers (v1.0.2)
 
 ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
 
@@ -196,8 +197,7 @@ class MyProvider:
 
 ### AgentKey integration
 
-[AgentKey](https://agentkey.us/) is the first external provider being developed
-against ToolBoundary's provider-neutral contract.
+[AgentKey](https://agentkey.us/) is the first external provider reference integration built against ToolBoundary's provider-neutral contract.
 
 The ToolBoundary repository contains the **ToolBoundary-side reference integration,
 example, and end-to-end test coverage**. The AgentKey-specific provider implementation
@@ -227,7 +227,7 @@ Key points:
 - **Cross-language canonical evidence is not defined by Python `json.dumps()`.** The native signed-evidence work will use RFC 8785 (JCS) as the canonicalization target.
 - **The reference integration is intentionally small.** It covers pre-dispatch authorization and post-dispatch evidence without moving security authority out of ToolBoundary.
 
-See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for the ToolBoundary-side example and [`tests/test_agentkey_integration.py`](tests/test_agentkey_integration.py) for the integration coverage.
+See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for the ToolBoundary-side example, [`tests/test_agentkey_integration.py`](tests/test_agentkey_integration.py) for the integration coverage, and [`src/toolboundary/redis_backend.py`](src/toolboundary/redis_backend.py) for the optional Redis backends.
 
 ### Authorization flow
 
