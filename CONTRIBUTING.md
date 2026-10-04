@@ -63,7 +63,7 @@ src/toolboundary/
 
 ## Architecture: the provider layer
 
-ToolBoundary v1.0.0 introduced a provider-neutral authorization and evidence
+ToolBoundary v1.0.x introduced a provider-neutral authorization and evidence
 layer. If you're contributing to this area, understand the key design rules:
 
 1. **Local DENY is final.** No provider, adapter, or integration may turn a
@@ -87,9 +87,9 @@ layer. If you're contributing to this area, understand the key design rules:
 6. **No vendor coupling in core.** Provider-specific code belongs under
    `integrations/`, never in `boundary.py`, `provider.py`, or `evidence.py`.
 
-7. **Optional Redis backends.** `redis_backend.py` provides shared rate-limiter and
-   token-store implementations for multi-process deployments. Redis remains an
-   optional dependency and must not become part of the core package.
+7. **Optional Redis backends.** `redis_backend.py` provides the merged v1.0.2 shared
+   rate-limiter and token-store implementations for multi-process deployments. Redis
+   remains an optional dependency and must not become part of the core package.
 
 ## Good first contributions
 
