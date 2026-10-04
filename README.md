@@ -25,10 +25,10 @@ ToolBoundary v1.0.1 introduces a **provider-neutral external authorization and e
 ### Key additions
 
 - **`EvidenceProvider` protocol** — a clean interface any external provider can implement to add authorization and execution evidence without coupling to a specific vendor
-- **`authorize_call()` / `record_execution()`** — a centralized orchestration flow that freezes the exact tool call, computes a cryptographic call digest (SHA-256 of canonical JSON), consults an optional provider, and records execution evidence
+- **Provider-aware execution lifecycle** — `authorize_call()` / `record_execution()` freeze the exact tool call, compute the current ToolBoundary call digest, consult an optional provider, and record execution evidence
 - **Observe / Enforce modes** — `ProviderMode.OBSERVE` logs provider decisions without blocking; `ProviderMode.ENFORCE` fails closed on provider denial or unavailability
 - **`evaluate()` method** — returns a structured `LocalDecision` instead of raise-on-deny, enabling richer programmatic integration
-- **Deterministic canonicalization** — equivalent dictionaries (`{"a":1,"b":2}` vs `{"b":2,"a":1}`) always produce identical digests, binding authorization to the exact call
+- **Deterministic call binding** — the current Python implementation uses canonical JSON key ordering to produce stable SHA-256 call digests; future cross-language/native signed evidence will use a standardized canonicalization scheme (RFC 8785 / JCS) rather than relying on Python-specific JSON serialization
 - **Replay prevention** — consumed authorizations cannot be reused for a second dispatch
 - **Post-dispatch resilience** — if a provider fails to record execution evidence, the local record is preserved
 
@@ -196,7 +196,13 @@ class MyProvider:
 
 ### AgentKey integration
 
-[AgentKey](https://agentkey.us/) is the first concrete external provider integration. ToolBoundary includes an `AgentKeyProvider` adapter implementing the provider-neutral contract:
+[AgentKey](https://agentkey.us/) is the first external provider being developed
+against ToolBoundary's provider-neutral contract.
+
+The ToolBoundary repository contains the **ToolBoundary-side reference integration,
+example, and end-to-end test coverage**. The AgentKey-specific provider implementation
+is maintained on the AgentKey side and plugs into the existing `EvidenceProvider`
+interface.
 
 ```python
 from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode, ProviderMode
@@ -207,9 +213,7 @@ provider = AgentKeyProvider(client=your_agentkey_client)
 boundary = Boundary(
     agent_name="support-agent",
     autonomy=AutonomyLevel.AUTONOMOUS,
-    permissions=[
-        ToolPermission("read_ticket", access_mode=AccessMode.READ_ONLY),
-    ],
+    permissions=[ToolPermission("read_ticket", access_mode=AccessMode.READ_ONLY)],
     provider=provider,
     provider_mode=ProviderMode.ENFORCE,
 )
@@ -217,12 +221,13 @@ boundary = Boundary(
 
 Key points:
 
-- **AgentKey is optional.** The core `pip install toolboundary` works without it.
-- **ToolBoundary remains the local enforcement authority.** Local deny is final — AgentKey cannot override it.
-- **Provider integration adds external authorization and cryptographic evidence** — it does not replace local policy.
-- **The core package has no AgentKey dependency.** The adapter lives in `toolboundary.integrations.agentkey`.
+- **AgentKey is optional.** The core `pip install toolboundary` remains independent.
+- **ToolBoundary remains the local enforcement authority.** A local deny is final.
+- **The provider contract is vendor-neutral.** Other authorization/evidence providers can implement the same interface.
+- **Cross-language canonical evidence is not defined by Python `json.dumps()`.** The native signed-evidence work will use RFC 8785 (JCS) as the canonicalization target.
+- **The reference integration is intentionally small.** It covers pre-dispatch authorization and post-dispatch evidence without moving security authority out of ToolBoundary.
 
-See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for a complete runnable demo and [`tests/test_agentkey_integration.py`](tests/test_agentkey_integration.py) for the end-to-end contract coverage.
+See [`examples/agentkey_integration.py`](examples/agentkey_integration.py) for the ToolBoundary-side example and [`tests/test_agentkey_integration.py`](tests/test_agentkey_integration.py) for the integration coverage.
 
 ### Authorization flow
 
@@ -269,6 +274,8 @@ boundary = Boundary(
     audit=AuditTrail(sinks=[JSONLFileSink("toolboundary-audit.jsonl")]),
 )
 ```
+
+For native or cross-language verifiable evidence, the canonicalization and signing format must be specified independently of Python's JSON serializer. See the RFC 8785/JCS evidence work planned for the native evidence roadmap.
 
 When a provider is configured, audit events automatically include evidence metadata:
 call digests, provider decisions, authorization IDs, and result digests.
