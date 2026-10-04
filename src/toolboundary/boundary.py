@@ -124,6 +124,7 @@ class Boundary:
         policy_hooks: list[PolicyHook] | None = None,
         fail_closed_on_hook_error: bool = True,
         token_issuer: Any | None = None,
+        rate_limiter: Any | None = None,
         # -- optional provider configuration --
         provider: EvidenceProvider | None = None,
         provider_mode: ProviderMode = ProviderMode.OBSERVE,
@@ -149,7 +150,12 @@ class Boundary:
         self.policy_hooks: list[PolicyHook] = policy_hooks or []
         self.fail_closed_on_hook_error = fail_closed_on_hook_error
 
-        self._rate_limiter = SlidingWindowRateLimiter()
+        # Default stays the in-memory limiter (zero infra). Pass a shared
+        # backend -- e.g. RedisSlidingWindowRateLimiter from
+        # toolboundary.redis_backend -- when multiple replicas must share
+        # one sliding window. Same duck-typed interface:
+        # check_and_record / current_count / reset.
+        self._rate_limiter = rate_limiter or SlidingWindowRateLimiter()
 
         # Optional: only set if the caller wants network-layer enforcement.
         # See `toolboundary.network` -- this is never required and never

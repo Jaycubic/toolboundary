@@ -13,7 +13,7 @@ git clone https://github.com/Jaycubic/toolboundary.git
 cd toolboundary
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e ".[dev,langchain]"
+pip install -e ".[dev,langchain,redis]"
 ```
 
 ## Running tests
@@ -54,6 +54,7 @@ src/toolboundary/
     tokens.py                # AuthorizationToken, TokenIssuer (network enforcement)
     network.py               # NetworkEnforcer proxy (optional, stdlib-only)
     _rate_limiter.py         # internal sliding-window rate limiter
+    redis_backend.py         # optional Redis rate limiter / token store
     decorators.py            # @guarded_tool (provider-aware)
     integrations/
         langchain.py         # LangChain BaseTool wrapping (provider-aware)
@@ -93,10 +94,6 @@ These are scoped, valuable, and don't require redesigning anything:
 - **Custom `EvidenceProvider` implementations** — implement the protocol for
   popular authorization platforms. Place under `integrations/` with an optional
   extra in `pyproject.toml`.
-- **Redis-backed rate limiter / token store** — for multi-process
-  deployments. Implement the same interface as `SlidingWindowRateLimiter`
-  and `InMemoryTokenStore` and submit as an optional extra
-  (`toolboundary[redis]`).
 - **CrewAI / AutoGen / LangGraph integrations** — mirror the structure of
   `integrations/langchain.py`: wrap the framework's actual tool-execution
   call site, not just provide a decorator the user has to remember to apply.
