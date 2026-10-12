@@ -45,6 +45,17 @@ Boundary(
 | `token_issuer` | Optional `toolboundary.tokens.TokenIssuer`. Only needed if you use `check_and_authorize()` / the network enforcement layer. |
 | `rate_limiter` | Optional rate-limiter object exposing `check_and_record` / `current_count` / `reset`. Defaults to the in-memory `SlidingWindowRateLimiter`. Pass `RedisSlidingWindowRateLimiter` from `toolboundary.redis_backend` for multi-replica deployments. |
 
+### Working policy-hook examples
+
+See [`examples/policy_hooks.py`](../examples/policy_hooks.py) for four ready-to-adapt patterns that use only the Python standard library:
+
+| Example | What it shows |
+|---|---|
+| `business_hours_only` | Time-of-day gate: deny calls outside a local hour window |
+| `restrict_writes_in_production` | Environment restriction via `ctx.metadata` |
+| `deny_egress_to_private_ranges` | Network-aware check using `ipaddress` from the standard library |
+| `InMemoryPolicyEngine` | External policy engine as a dependency-free `EvidenceProvider` |
+
 ### `Boundary.check(...)`
 
 ```python
