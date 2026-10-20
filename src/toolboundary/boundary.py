@@ -18,19 +18,21 @@ turn a local deny into an allow.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 import uuid
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
-    from .tokens import AuthorizationToken
+    from .tokens import AuthorizationToken, TokenIssuer
 
 from ._rate_limiter import SlidingWindowRateLimiter
 from .audit import AuditTrail
 from .enums import AccessMode, AutonomyLevel, DecisionType, ViolationReason
-from .evidence import build_execution_record, freeze_with_digest
+from .evidence import _UNSET, build_execution_record, freeze_with_digest
 from .exceptions import (
     ApprovalRequired,
     AuthorizationConsumed,
@@ -69,6 +71,24 @@ or calling out to an external policy engine / GuardianIQ-style registry).
 """
 
 
+def _as_finite_number(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            number = float(value)
+        except (OverflowError, ValueError):
+            return None
+    elif isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return None
+    else:
+        return None
+    return number if math.isfinite(number) else None
+
+
 @dataclass(frozen=True)
 class CallContext:
     """Everything ToolBoundary knows about one prospective tool call."""
@@ -77,8 +97,8 @@ class CallContext:
     tool_name: str
     operation: str | None = None
     access_mode: AccessMode = AccessMode.READ_ONLY
-    value: float | None = None
-    record_count: int | None = None
+    value: int | float | Decimal | str | None = None
+    record_count: int | float | Decimal | str | None = None
     correlation_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -123,7 +143,8 @@ class Boundary:
         audit: AuditTrail | None = None,
         policy_hooks: list[PolicyHook] | None = None,
         fail_closed_on_hook_error: bool = True,
-        token_issuer: Any | None = None,
+        strict_limits: bool = False,
+        token_issuer: TokenIssuer | None = None,
         rate_limiter: Any | None = None,
         # -- optional provider configuration --
         provider: EvidenceProvider | None = None,
@@ -149,6 +170,7 @@ class Boundary:
         self.audit = audit or AuditTrail()
         self.policy_hooks: list[PolicyHook] = policy_hooks or []
         self.fail_closed_on_hook_error = fail_closed_on_hook_error
+        self.strict_limits = strict_limits
 
         # Default stays the in-memory limiter (zero infra). Pass a shared
         # backend -- e.g. RedisSlidingWindowRateLimiter from
@@ -210,8 +232,8 @@ class Boundary:
         *,
         operation: str | None = None,
         access_mode: AccessMode = AccessMode.READ_ONLY,
-        value: float | None = None,
-        record_count: int | None = None,
+        value: int | float | Decimal | str | None = None,
+        record_count: int | float | Decimal | str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> LocalDecision:
@@ -292,8 +314,8 @@ class Boundary:
         *,
         operation: str | None = None,
         access_mode: AccessMode = AccessMode.READ_ONLY,
-        value: float | None = None,
-        record_count: int | None = None,
+        value: int | float | Decimal | str | None = None,
+        record_count: int | float | Decimal | str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -382,8 +404,8 @@ class Boundary:
         *,
         operation: str | None = None,
         access_mode: AccessMode = AccessMode.READ_ONLY,
-        value: float | None = None,
-        record_count: int | None = None,
+        value: int | float | Decimal | str | None = None,
+        record_count: int | float | Decimal | str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuthorizationToken:
@@ -438,8 +460,8 @@ class Boundary:
         operation: str | None = None,
         access_mode: AccessMode = AccessMode.READ_ONLY,
         arguments: dict[str, Any],
-        value: float | None = None,
-        record_count: int | None = None,
+        value: int | float | Decimal | str | None = None,
+        record_count: int | float | Decimal | str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         resource: str | None = None,
@@ -602,7 +624,7 @@ class Boundary:
         self,
         authorization: AuthorizationContext,
         *,
-        result: Any = None,
+        result: Any = _UNSET,
         error: BaseException | None = None,
         started_at: float,
         finished_at: float,
@@ -792,13 +814,40 @@ class Boundary:
             )
 
     def _check_value_limit(self, ctx: CallContext, permission: ToolPermission) -> None:
-        if (
-            ctx.value is not None
-            and permission.max_value is not None
-            and ctx.value > permission.max_value
-        ):
+        if ctx.value is None:
+            if self.strict_limits and permission.max_value is not None:
+                raise BoundaryViolation(
+                    f"A value is required to enforce max_value for tool {ctx.tool_name!r}.",
+                    agent_name=ctx.agent_name,
+                    tool_name=ctx.tool_name,
+                    operation=ctx.operation,
+                    rule=ViolationReason.VALUE_REQUIRED.value,
+                )
+            return
+        if permission.max_value is None and permission.min_value is None:
+            return
+
+        value = _as_finite_number(ctx.value)
+        if value is None:
             raise BoundaryViolation(
-                f"Value {ctx.value} exceeds max_value {permission.max_value} "
+                f"Value {ctx.value!r} is not a valid finite number for tool {ctx.tool_name!r}.",
+                agent_name=ctx.agent_name,
+                tool_name=ctx.tool_name,
+                operation=ctx.operation,
+                rule=ViolationReason.INVALID_VALUE.value,
+            )
+        if permission.min_value is not None and value < permission.min_value:
+            raise BoundaryViolation(
+                f"Value {value} is below min_value {permission.min_value} "
+                f"for tool {ctx.tool_name!r}.",
+                agent_name=ctx.agent_name,
+                tool_name=ctx.tool_name,
+                operation=ctx.operation,
+                rule=ViolationReason.MIN_VALUE_VIOLATED.value,
+            )
+        if permission.max_value is not None and value > permission.max_value:
+            raise BoundaryViolation(
+                f"Value {value} exceeds max_value {permission.max_value} "
                 f"for tool {ctx.tool_name!r}.",
                 agent_name=ctx.agent_name,
                 tool_name=ctx.tool_name,
@@ -807,13 +856,33 @@ class Boundary:
             )
 
     def _check_record_limit(self, ctx: CallContext, permission: ToolPermission) -> None:
-        if (
-            ctx.record_count is not None
-            and permission.max_records is not None
-            and ctx.record_count > permission.max_records
-        ):
+        if ctx.record_count is None:
+            if self.strict_limits and permission.max_records is not None:
+                raise BoundaryViolation(
+                    f"A record_count is required to enforce max_records for tool "
+                    f"{ctx.tool_name!r}.",
+                    agent_name=ctx.agent_name,
+                    tool_name=ctx.tool_name,
+                    operation=ctx.operation,
+                    rule=ViolationReason.RECORDS_REQUIRED.value,
+                )
+            return
+        if permission.max_records is None:
+            return
+
+        record_count = _as_finite_number(ctx.record_count)
+        if record_count is None or record_count < 0 or not record_count.is_integer():
             raise BoundaryViolation(
-                f"record_count {ctx.record_count} exceeds max_records {permission.max_records} "
+                f"record_count {ctx.record_count!r} must be a non-negative integer.",
+                agent_name=ctx.agent_name,
+                tool_name=ctx.tool_name,
+                operation=ctx.operation,
+                rule=ViolationReason.INVALID_VALUE.value,
+            )
+        if record_count > permission.max_records:
+            raise BoundaryViolation(
+                f"record_count {record_count:g} exceeds max_records "
+                f"{permission.max_records} "
                 f"for tool {ctx.tool_name!r}.",
                 agent_name=ctx.agent_name,
                 tool_name=ctx.tool_name,

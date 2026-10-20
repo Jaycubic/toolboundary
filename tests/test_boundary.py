@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from decimal import Decimal
 
 import pytest
 
@@ -89,6 +90,32 @@ class TestBlockedOperations:
         b.check("send_email", operation="send_single", access_mode=AccessMode.EXECUTE)
 
 
+class TestAllowedOperations:
+    def _boundary(self, allowed_operations):
+        return Boundary(
+            agent_name="agent",
+            autonomy=AutonomyLevel.AUTONOMOUS,
+            permissions=[
+                ToolPermission(
+                    "read_db",
+                    access_mode=AccessMode.READ_ONLY,
+                    allowed_operations=allowed_operations,
+                )
+            ],
+        )
+
+    def test_allow_list_requires_named_operation(self):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            self._boundary(frozenset({"read"})).check("read_db")
+        assert exc_info.value.rule == "OPERATION_BLOCKED"
+
+    def test_allow_list_allows_member(self):
+        self._boundary(frozenset({"read"})).check("read_db", operation="read")
+
+    def test_missing_operation_remains_allowed_without_allow_list(self):
+        self._boundary(None).check("read_db")
+
+
 class TestValueAndRecordLimits:
     def test_value_under_limit_allowed(self):
         b = make_boundary()
@@ -105,6 +132,66 @@ class TestValueAndRecordLimits:
         with pytest.raises(BoundaryViolation) as exc_info:
             b.check("wire_transfer", access_mode=AccessMode.EXECUTE, value=1.0, record_count=100)
         assert exc_info.value.rule == "MAX_RECORDS_EXCEEDED"
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "abc"])
+    def test_invalid_values_are_denied(self, value):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", value=value)
+        assert exc_info.value.rule == "INVALID_VALUE"
+
+    def test_numeric_string_is_checked_against_ceiling(self):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", value="999999")
+        assert exc_info.value.rule == "MAX_VALUE_EXCEEDED"
+        make_boundary().check("wire_transfer", value="500")
+
+    def test_decimal_is_checked_against_ceiling(self):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", value=Decimal("5000"))
+        assert exc_info.value.rule == "MAX_VALUE_EXCEEDED"
+
+    def test_min_value_rejects_negative_amount(self):
+        boundary = Boundary(
+            agent_name="agent",
+            autonomy=AutonomyLevel.AUTONOMOUS,
+            permissions=[
+                ToolPermission(
+                    "refund",
+                    access_mode=AccessMode.EXECUTE,
+                    min_value=0,
+                    max_value=500,
+                )
+            ],
+        )
+        with pytest.raises(BoundaryViolation) as exc_info:
+            boundary.check("refund", value=-1)
+        assert exc_info.value.rule == "MIN_VALUE_VIOLATED"
+
+    @pytest.mark.parametrize(
+        ("value", "reason"),
+        [
+            ("-1", "INVALID_VALUE"),
+            ("1.5", "INVALID_VALUE"),
+            ("abc", "INVALID_VALUE"),
+        ],
+    )
+    def test_record_count_must_be_non_negative_integer(self, value, reason):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", record_count=value)
+        assert exc_info.value.rule == reason
+
+    def test_missing_limits_are_optional_by_default(self):
+        make_boundary().check("wire_transfer")
+
+    @pytest.mark.parametrize(
+        ("argument", "reason"),
+        [("value", "VALUE_REQUIRED"), ("record_count", "RECORDS_REQUIRED")],
+    )
+    def test_strict_limits_require_values(self, argument, reason):
+        supplied = {"value": 500} if argument == "record_count" else {}
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary(strict_limits=True).check("wire_transfer", **supplied)
+        assert exc_info.value.rule == reason
 
 
 class TestKillSwitch:

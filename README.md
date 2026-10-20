@@ -2,11 +2,11 @@
 
 **Runtime boundary enforcement for AI agents — as a library, not a service.**
 
-[![PyPI](https://img.shields.io/badge/pypi-v1.0.2-blue)](https://pypi.org/project/toolboundary/)
+[![PyPI](https://img.shields.io/pypi/v/toolboundary)](https://pypi.org/project/toolboundary/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-122%20passed-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](tests/)
+[![CI](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml/badge.svg)](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/Jaycubic/toolboundary/branch/main/graph/badge.svg)](https://codecov.io/gh/Jaycubic/toolboundary)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
 tool: **"is this exact call allowed, right now?"**
@@ -18,7 +18,33 @@ Your policy is plain Python, version-controlled with the rest of your code.
 pip install toolboundary
 ```
 
-## What's new in v1.0.2
+## What's new in v1.0.3 (planned)
+
+The planned ToolBoundary v1.0.3 security and correctness release prevents client paths
+from changing a network proxy's configured upstream host, rejects traversal paths,
+validates numeric limits, requires named operations for configured allow-lists, and
+redacts sensitive arguments from decorator-generated audit metadata.
+
+### Security and correctness fixes
+
+- **Network proxy target validation** — request paths cannot change the configured
+  upstream authority or traverse above its base path; oversized request bodies are
+  rejected.
+- **Operation allow-lists** — a call must provide an operation when a tool has an
+  `allowed_operations` allow-list.
+- **Numeric limits** — malformed and non-finite values are denied, optional minimum
+  values are supported, and `strict_limits=True` requires values for configured
+  ceilings.
+- **Audit argument redaction** — common secret-like argument names are redacted by
+  default, with options for custom sensitive argument names and value-free logging.
+- **Execution evidence** — a tool that successfully returns `None` is recorded as a
+  successful execution.
+
+This release also includes the provider-neutral authorization/evidence architecture,
+ToolBoundary-side AgentKey reference integration, and optional Redis shared backends
+introduced in v1.0.2.
+
+## What's new in v1.0.2 (historical)
 
 ToolBoundary v1.0.2 consolidates the provider-neutral authorization/evidence architecture introduced in v1.0.0 with the ToolBoundary-side AgentKey reference integration and an optional Redis backend for shared rate limiting and token storage, while keeping ToolBoundary as the local enforcement authority.
 
@@ -135,7 +161,7 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
-## External authorization providers (v1.0.2)
+## External authorization providers (introduced in v1.0.2)
 
 ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
 
@@ -331,6 +357,9 @@ it does *not* do is more important than what it does:
 - **Provider evidence is only as trustworthy as the provider.** An SDK-reported result
   does not itself prove that an external side effect occurred — it proves the SDK
   reported it. See the provider documentation for what guarantees each provider makes.
+- **Numeric ceilings need supplied values by default.** If the caller omits `value` or
+  `record_count`, its configured maximum is not evaluated unless
+  `Boundary(strict_limits=True)` is enabled.
 
 If your threat model requires guaranteeing that a compromised agent *physically
 cannot* reach a tool's network endpoint except through an approved path, you need a

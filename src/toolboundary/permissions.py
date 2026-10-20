@@ -32,9 +32,9 @@ class ToolPermission:
         is not a strict hierarchy ToolBoundary assumes automatically -- each
         mode is checked explicitly against what the tool call declares it needs.
     allowed_operations:
-        If set, only these operation names are allowed for this tool. If
-        None, all operations are allowed by default (subject to
-        blocked_operations and access_mode).
+        If set, a call must name an operation in this set. If None, all
+        operations are allowed by default (subject to blocked_operations
+        and access_mode).
     blocked_operations:
         Operation names that are always denied for this tool, regardless of
         allowed_operations or access_mode. Blocked always wins.
@@ -43,6 +43,9 @@ class ToolPermission:
     max_value:
         Optional numeric ceiling checked against a `value` kwarg passed at
         call time (e.g. transaction amount). None disables the check.
+    min_value:
+        Optional numeric floor checked against a `value` kwarg passed at
+        call time. None disables the check.
     max_records:
         Optional ceiling checked against a `record_count` kwarg passed at
         call time. None disables the check.
@@ -58,14 +61,13 @@ class ToolPermission:
     blocked_operations: frozenset[str] = field(default_factory=frozenset)
     max_calls_per_hour: int | None = None
     max_value: float | None = None
+    min_value: float | None = None
     max_records: int | None = None
     requires_approval: bool = False
 
     def operation_allowed(self, operation: str | None) -> bool:
-        if operation is None:
-            return True
-        if operation in self.blocked_operations:
+        if operation is not None and operation in self.blocked_operations:
             return False
-        if self.allowed_operations is not None and operation not in self.allowed_operations:
-            return False
+        if self.allowed_operations is not None:
+            return operation is not None and operation in self.allowed_operations
         return True

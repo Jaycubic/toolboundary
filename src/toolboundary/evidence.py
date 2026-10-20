@@ -24,6 +24,8 @@ from typing import Any
 
 from .provider import ExecutionRecord, FrozenToolCall
 
+_UNSET = object()
+
 
 def canonicalize(value: Any) -> str:
     """Produce a deterministic JSON string from an arbitrary value.
@@ -111,7 +113,7 @@ def build_execution_record(
     call_digest: str,
     started_at: float,
     finished_at: float,
-    result: Any = None,
+    result: Any = _UNSET,
     error: BaseException | None = None,
 ) -> ExecutionRecord:
     """Build an ExecutionRecord from execution outcomes.
@@ -142,13 +144,13 @@ def build_execution_record(
             error_type=type(error).__name__,
             error_message=str(error),
         )
-    elif result is not None:
+    elif result is not _UNSET:
         return ExecutionRecord(
             call_digest=call_digest,
             status="success",
             started_at=started_at,
             finished_at=finished_at,
-            result_digest=result_digest(result),
+            result_digest=None if result is None else result_digest(result),
         )
     else:
         return ExecutionRecord(

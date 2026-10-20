@@ -583,3 +583,30 @@ class TestFullOrchestratedPath:
         assert execution.status == "error"
         assert execution.error_type == "ValueError"
         assert "database connection failed" in execution.error_message
+
+    def test_none_result_is_a_successful_execution(self):
+        spy = SpyProvider()
+        boundary = make_boundary(provider=spy, provider_mode=ProviderMode.ENFORCE)
+        authorization = boundary.authorize_call(
+            tool_name="read_db",
+            access_mode=AccessMode.READ_ONLY,
+            arguments={},
+        )
+        boundary.record_execution(
+            authorization,
+            result=None,
+            started_at=time.time(),
+            finished_at=time.time(),
+        )
+        assert spy.record_calls[0][1].status == "success"
+        assert spy.record_calls[0][1].result_digest is None
+
+    def test_unspecified_result_remains_unknown(self):
+        from toolboundary.evidence import build_execution_record
+
+        execution = build_execution_record(
+            call_digest="digest",
+            started_at=time.time(),
+            finished_at=time.time(),
+        )
+        assert execution.status == "unknown"

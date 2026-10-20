@@ -25,6 +25,7 @@ import inspect
 import time
 from typing import Any, Callable, TypeVar
 
+from ._redact import redact_args
 from .boundary import Boundary
 from .enums import AccessMode
 
@@ -44,6 +45,8 @@ def guarded_tool(
     tool_version: str | None = None,
     schema_hash: str | None = None,
     manifest_hash: str | None = None,
+    sensitive_args: frozenset[str] = frozenset(),
+    log_arg_values: bool = True,
 ) -> Callable[[F], F]:
     """
     Decorate a function so every call is evaluated against `boundary` first.
@@ -71,6 +74,10 @@ def guarded_tool(
     resource / tool_version / schema_hash / manifest_hash:
         Optional provider-binding fields included in the FrozenToolCall
         when a provider is configured.
+    sensitive_args:
+        Argument names that must be redacted from audit metadata.
+    log_arg_values:
+        If False, log argument types instead of their values.
 
     Example
     -------
@@ -92,7 +99,7 @@ def guarded_tool(
             bound.apply_defaults()
             call_kwargs = bound.arguments
 
-            resolved_operation = call_kwargs.get("operation", operation)
+            resolved_operation = call_kwargs.get("operation") or operation
             resolved_value = call_kwargs.get(value_arg) if value_arg else None
             resolved_record_count = (
                 call_kwargs.get(record_count_arg) if record_count_arg else None
@@ -112,7 +119,13 @@ def guarded_tool(
                     value=resolved_value,
                     record_count=resolved_record_count,
                     correlation_id=resolved_correlation_id,
-                    metadata={"args": _safe_repr(kwargs)},
+                    metadata={
+                        "args": redact_args(
+                            call_kwargs,
+                            extra_names=sensitive_args,
+                            log_values=log_arg_values,
+                        )
+                    },
                     resource=resource,
                     tool_version=tool_version,
                     schema_hash=schema_hash,
@@ -147,7 +160,13 @@ def guarded_tool(
                     value=resolved_value,
                     record_count=resolved_record_count,
                     correlation_id=resolved_correlation_id,
-                    metadata={"args": _safe_repr(kwargs)},
+                    metadata={
+                        "args": redact_args(
+                            call_kwargs,
+                            extra_names=sensitive_args,
+                            log_values=log_arg_values,
+                        )
+                    },
                 )
 
                 return func(*args, **kwargs)
@@ -161,11 +180,4 @@ def guarded_tool(
 
 def _safe_repr(kwargs: dict[str, Any], max_len: int = 200) -> dict[str, str]:
     """Best-effort stringification of call args for audit metadata, truncated for safety."""
-    out: dict[str, str] = {}
-    for k, v in kwargs.items():
-        try:
-            s = repr(v)
-        except Exception:  # noqa: BLE001
-            s = "<unrepresentable>"
-        out[k] = s if len(s) <= max_len else s[:max_len] + "...(truncated)"
-    return out
+    return redact_args(kwargs, max_len=max_len)

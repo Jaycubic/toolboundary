@@ -49,19 +49,41 @@ from __future__ import annotations
 
 import http.server
 import logging
+import posixpath
 import socketserver
 import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Callable
-from urllib.parse import urljoin
+from urllib.parse import unquote, urlsplit
 
 from .tokens import AuthorizationToken, InMemoryTokenStore, TokenExpired, TokenInvalid, TokenIssuer
 
 _logger = logging.getLogger("toolboundary.network")
 
 AUTH_HEADER = "X-ToolBoundary-Token"
+
+
+def _resolve_target(base: str | None, rest: str) -> str | None:
+    """Join a client path to an operator-configured base without changing authority."""
+    if base is None:
+        return None
+    base_parts = urlsplit(base)
+    path, separator, query = rest.partition("?")
+    decoded_path = unquote(path)
+    if "\\" in decoded_path or "\x00" in decoded_path:
+        return None
+    if any(segment == ".." for segment in decoded_path.split("/")):
+        return None
+
+    clean_path = posixpath.join(base_parts.path or "/", path.lstrip("/"))
+    target = f"{base_parts.scheme}://{base_parts.netloc}{clean_path}"
+    if separator:
+        target += f"?{query}"
+    if urlsplit(target).netloc != base_parts.netloc:
+        return None
+    return target
 
 
 @dataclass(frozen=True)
@@ -110,11 +132,15 @@ class NetworkEnforcer:
         *,
         token_store: InMemoryTokenStore | None = None,
         on_denied: Callable[[str, str], None] | None = None,
+        max_body_bytes: int = 10 * 1024 * 1024,
     ) -> None:
+        if max_body_bytes < 0:
+            raise ValueError("max_body_bytes must be non-negative.")
         self._issuer = issuer
         self._routes = {r.tool_name: r for r in routes}
         self._token_store = token_store or InMemoryTokenStore()
         self._on_denied = on_denied
+        self._max_body_bytes = max_body_bytes
         self._server: socketserver.TCPServer | None = None
         self._thread: threading.Thread | None = None
 
@@ -200,6 +226,7 @@ def _make_handler(enforcer: NetworkEnforcer) -> type[http.server.BaseHTTPRequest
             allowed, reason, upstream_base = enforcer.authorize_and_resolve(tool_name, token_wire)
 
             if not allowed:
+                self.close_connection = True
                 if enforcer._on_denied:  # noqa: SLF001
                     try:
                         enforcer._on_denied(tool_name, reason)  # noqa: SLF001
@@ -207,16 +234,71 @@ def _make_handler(enforcer: NetworkEnforcer) -> type[http.server.BaseHTTPRequest
                         _logger.debug(
                             "toolboundary.network: on_denied callback raised", exc_info=True
                         )
-                body = f'{{"error":"denied","reason":"{reason}"}}'.encode()
+                error_body = f'{{"error":"denied","reason":"{reason}"}}'.encode()
                 self.send_response(403)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Length", str(len(error_body)))
                 self.end_headers()
-                self.wfile.write(body)
+                self.wfile.write(error_body)
                 return
 
-            target_url = urljoin(upstream_base.rstrip("/") + "/", rest)  # type: ignore[union-attr]
-            content_length = int(self.headers.get("Content-Length", 0))
+            target_url = _resolve_target(upstream_base, rest)
+            if target_url is None:
+                self.close_connection = True
+                if enforcer._on_denied:  # noqa: SLF001
+                    try:
+                        enforcer._on_denied(tool_name, "BAD_PATH")  # noqa: SLF001
+                    except Exception:  # noqa: BLE001
+                        _logger.debug(
+                            "toolboundary.network: on_denied callback raised", exc_info=True
+                        )
+                error_body = b'{"error":"bad_path"}'
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(error_body)))
+                self.end_headers()
+                self.wfile.write(error_body)
+                return
+
+            if self.headers.get("Transfer-Encoding") is not None:
+                self.close_connection = True
+                error_body = b'{"error":"unsupported_transfer_encoding"}'
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(error_body)))
+                self.end_headers()
+                self.wfile.write(error_body)
+                return
+
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+            except ValueError:
+                self.close_connection = True
+                error_body = b'{"error":"invalid_content_length"}'
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(error_body)))
+                self.end_headers()
+                self.wfile.write(error_body)
+                return
+            if content_length < 0:
+                self.close_connection = True
+                error_body = b'{"error":"invalid_content_length"}'
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(error_body)))
+                self.end_headers()
+                self.wfile.write(error_body)
+                return
+            if content_length > enforcer._max_body_bytes:  # noqa: SLF001
+                self.close_connection = True
+                error_body = b'{"error":"body_too_large"}'
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(error_body)))
+                self.end_headers()
+                self.wfile.write(error_body)
+                return
             body = self.rfile.read(content_length) if content_length else None
 
             forward_headers = {
@@ -226,36 +308,32 @@ def _make_handler(enforcer: NetworkEnforcer) -> type[http.server.BaseHTTPRequest
             }
 
             try:
-                # S310: target_url is resolved from a registered UpstreamRoute
-                # (an operator-configured allowlist, see authorize_and_resolve),
-                # never from unvalidated client input -- the whole point of
-                # this proxy is that only pre-approved, token-gated
-                # destinations are ever reachable here.
+                # S310: target_url retains the authority from the registered route.
                 req = urllib.request.Request(  # noqa: S310
                     target_url, data=body, headers=forward_headers, method=self.command
                 )
                 with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-                    resp_body = resp.read()
+                    response_body = resp.read()
                     self.send_response(resp.status)
                     for k, v in resp.getheaders():
                         if k.lower() not in {"transfer-encoding", "connection"}:
                             self.send_header(k, v)
-                    self.send_header("Content-Length", str(len(resp_body)))
+                    self.send_header("Content-Length", str(len(response_body)))
                     self.end_headers()
-                    self.wfile.write(resp_body)
+                    self.wfile.write(response_body)
             except urllib.error.HTTPError as exc:
-                resp_body = exc.read()
+                response_body = exc.read()
                 self.send_response(exc.code)
-                self.send_header("Content-Length", str(len(resp_body)))
+                self.send_header("Content-Length", str(len(response_body)))
                 self.end_headers()
-                self.wfile.write(resp_body)
+                self.wfile.write(response_body)
             except Exception as exc:  # noqa: BLE001
                 _logger.warning("toolboundary.network: upstream request failed: %s", exc)
-                body = b'{"error":"upstream_unreachable"}'
+                error_body = b'{"error":"upstream_unreachable"}'
                 self.send_response(502)
-                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Length", str(len(error_body)))
                 self.end_headers()
-                self.wfile.write(body)
+                self.wfile.write(error_body)
 
         def do_GET(self) -> None:  # noqa: N802
             self._handle()

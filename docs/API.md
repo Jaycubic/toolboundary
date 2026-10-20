@@ -22,6 +22,7 @@ Boundary(
     audit: AuditTrail | None = None,
     policy_hooks: list[PolicyHook] | None = None,
     fail_closed_on_hook_error: bool = True,
+    strict_limits: bool = False,
     token_issuer: TokenIssuer | None = None,
     rate_limiter: SlidingWindowRateLimiter | None = None,
 )
@@ -42,6 +43,7 @@ Boundary(
 | `audit` | An `AuditTrail` instance. Defaults to logging via stdlib `logging`. |
 | `policy_hooks` | List of callables `(CallContext) -> str | None` for custom logic. Return a string to deny with that reason, `None` to allow. |
 | `fail_closed_on_hook_error` | If `True` (default), an exception inside a policy hook denies the call. If `False`, the hook is treated as "allow" on error. |
+| `strict_limits` | If `True`, require `value` / `record_count` when a matching maximum is configured. Defaults to `False` for compatibility. |
 | `token_issuer` | Optional `toolboundary.tokens.TokenIssuer`. Only needed if you use `check_and_authorize()` / the network enforcement layer. |
 | `rate_limiter` | Optional rate-limiter object exposing `check_and_record` / `current_count` / `reset`. Defaults to the in-memory `SlidingWindowRateLimiter`. Pass `RedisSlidingWindowRateLimiter` from `toolboundary.redis_backend` for multi-replica deployments. |
 
@@ -104,6 +106,7 @@ ToolPermission(
     blocked_operations: frozenset[str] = frozenset(),
     max_calls_per_hour: int | None = None,
     max_value: float | None = None,
+    min_value: float | None = None,
     max_records: int | None = None,
     requires_approval: bool = False,
 )
@@ -113,6 +116,12 @@ Declares what an agent may do with **one** named tool. `access_mode` is
 checked as a ceiling: requesting a higher mode than granted is denied,
 requesting a lower or equal mode is fine (e.g. a tool granted `EXECUTE`
 can still be called with `access_mode=READ_ONLY`).
+
+When `allowed_operations` is set, each call must specify an operation from
+that allow-list. `min_value` and `max_value` bound numeric values when a
+value is supplied. By default, omitted values do not trigger a ceiling;
+`Boundary(strict_limits=True)` requires values when the corresponding
+`max_value` or `max_records` limit is configured.
 
 ---
 
@@ -323,6 +332,10 @@ none of the above can see or stop it.
    forwards a request if it carries a valid, unexpired, not-yet-used token
    in the `X-ToolBoundary-Token` header — otherwise it returns `403`
    immediately, without contacting the upstream at all.
+
+   The proxy rejects paths that attempt to escape the configured upstream path
+   or change its host. Request bodies are limited to 10 MiB by default; pass
+   `max_body_bytes` to `NetworkEnforcer` to change that limit.
 
 ```python
 from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode

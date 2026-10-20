@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "toolboundary"
-version = "1.0.2"
+dynamic = ["version"]
 description = "Local runtime security and policy enforcement for AI agents and LLM tool calls, with provider-neutral authorization, evidence, and optional Redis backends."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -60,6 +60,9 @@ Documentation = "https://github.com/Jaycubic/toolboundary/blob/main/docs/API.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/toolboundary"]
+
+[tool.hatch.version]
+path = "src/toolboundary/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

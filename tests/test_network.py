@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import http.server
+import socket
 import socketserver
 import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 import pytest
 
-from toolboundary.network import AUTH_HEADER, NetworkEnforcer, UpstreamRoute
+from toolboundary.network import AUTH_HEADER, NetworkEnforcer, UpstreamRoute, _resolve_target
 from toolboundary.tokens import InMemoryTokenStore, TokenIssuer
 
 
@@ -58,6 +60,36 @@ def enforcer(upstream_server):
 
 def _proxy_url(port: int, path: str) -> str:
     return f"http://127.0.0.1:{port}/{path}"
+
+
+@pytest.mark.parametrize(
+    ("rest", "reject"),
+    [
+        ("//evil/x", False),
+        ("///evil/x", False),
+        ("/../admin", True),
+        ("/%2e%2e/admin", True),
+        ("/%2E%2E%2Fadmin", True),
+        ("\\\\evil", True),
+        ("http://evil/x", False),
+        ("@evil", False),
+        ("?x=@evil", False),
+    ],
+)
+def test_target_resolution_never_leaves_configured_upstream(rest, reject):
+    base = "https://approved.example.com/api"
+    target = _resolve_target(base, rest)
+    if reject:
+        assert target is None
+    else:
+        assert target is not None
+        assert urlsplit(target).netloc == "approved.example.com"
+
+
+def test_target_resolution_preserves_normal_paths_and_queries():
+    assert _resolve_target("https://approved.example.com/api", "customers/42?x=1") == (
+        "https://approved.example.com/api/customers/42?x=1"
+    )
 
 
 class TestNetworkEnforcement:
@@ -157,3 +189,111 @@ class TestNetworkEnforcement:
             assert denied_calls == [("crm_api", "MISSING_TOKEN")]
         finally:
             enf.stop()
+
+    def test_request_body_limit_rejects_oversized_body(self, upstream_server):
+        issuer = TokenIssuer(secret="shared-test-secret")
+        enf = NetworkEnforcer(
+            issuer=issuer,
+            routes=[UpstreamRoute("crm_api", upstream_server)],
+            max_body_bytes=4,
+        )
+        enf.start(host="127.0.0.1", port=0)
+        port = enf._server.server_address[1]  # noqa: SLF001
+        try:
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            req = urllib.request.Request(
+                _proxy_url(port, "crm_api/customers"),
+                data=b"12345",
+                headers={AUTH_HEADER: token.to_wire()},
+                method="POST",
+            )
+            with pytest.raises(urllib.error.HTTPError) as exc_info:
+                urllib.request.urlopen(req, timeout=5)
+            assert exc_info.value.code == 413
+        finally:
+            enf.stop()
+
+    def test_invalid_content_length_is_rejected(self, upstream_server):
+        issuer = TokenIssuer(secret="shared-test-secret")
+        enf = NetworkEnforcer(
+            issuer=issuer,
+            routes=[UpstreamRoute("crm_api", upstream_server)],
+        )
+        enf.start(host="127.0.0.1", port=0)
+        port = enf._server.server_address[1]  # noqa: SLF001
+        try:
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+                client.sendall(
+                    (
+                        "POST /crm_api/customers HTTP/1.1\r\n"
+                        "Host: 127.0.0.1\r\n"
+                        f"{AUTH_HEADER}: {token.to_wire()}\r\n"
+                        "Content-Length: invalid\r\n"
+                        "Connection: close\r\n\r\n"
+                    ).encode()
+                )
+                response = client.recv(1024)
+            assert b"400 Bad Request" in response
+        finally:
+            enf.stop()
+
+    def test_transfer_encoded_request_body_is_rejected(self, upstream_server):
+        issuer = TokenIssuer(secret="shared-test-secret")
+        enf = NetworkEnforcer(
+            issuer=issuer,
+            routes=[UpstreamRoute("crm_api", upstream_server)],
+        )
+        enf.start(host="127.0.0.1", port=0)
+        port = enf._server.server_address[1]  # noqa: SLF001
+        try:
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+                client.sendall(
+                    (
+                        "POST /crm_api/customers HTTP/1.1\r\n"
+                        "Host: 127.0.0.1\r\n"
+                        f"{AUTH_HEADER}: {token.to_wire()}\r\n"
+                        "Transfer-Encoding: chunked\r\n"
+                        "Connection: close\r\n\r\n"
+                        "0\r\n\r\n"
+                    ).encode()
+                )
+                response = client.recv(1024)
+            assert b"400 Bad Request" in response
+        finally:
+            enf.stop()
+
+    def test_network_path_reference_cannot_redirect_proxy_to_another_host(self, enforcer):
+        enf, issuer, proxy_port = enforcer
+        evil_hits = []
+
+        class _EvilHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, fmt, *args):
+                pass
+
+            def do_GET(self):  # noqa: N802
+                evil_hits.append(self.path)
+                body = b"EVIL SERVER"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        evil_server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _EvilHandler)
+        evil_thread = threading.Thread(target=evil_server.serve_forever, daemon=True)
+        evil_thread.start()
+        try:
+            evil_authority = f"127.0.0.1:{evil_server.server_address[1]}"
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            req = urllib.request.Request(
+                _proxy_url(proxy_port, f"crm_api///{evil_authority}/steal"),
+                headers={AUTH_HEADER: token.to_wire()},
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                body = response.read()
+            assert b"EVIL SERVER" not in body
+            assert evil_hits == []
+        finally:
+            evil_server.shutdown()
+            evil_server.server_close()

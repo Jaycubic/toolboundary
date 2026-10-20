@@ -139,7 +139,15 @@ class TokenIssuer:
             "expires_at": now + self.ttl_seconds,
         }
         signature = self._sign(payload)
-        return AuthorizationToken(signature=signature, **payload)
+        return AuthorizationToken(
+            token_id=token_id,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            operation=operation,
+            issued_at=now,
+            expires_at=now + self.ttl_seconds,
+            signature=signature,
+        )
 
     def verify(
         self,

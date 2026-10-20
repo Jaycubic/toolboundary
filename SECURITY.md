@@ -9,7 +9,8 @@ be ignored — please report it privately rather than opening a public issue.
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | ✅ Active (current stable release) |
+| 1.0.3   | ✅ Planned release |
+| 1.0.0–1.0.2 | ✅ Supported |
 | < 1.0   | ❌ No longer supported |
 
 ## Reporting

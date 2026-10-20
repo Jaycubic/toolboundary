@@ -10,6 +10,7 @@ from toolboundary import (
     ToolPermission,
     guarded_tool,
 )
+from toolboundary.audit import AuditTrail
 from toolboundary.provider import (
     ProviderGrant,
     ProviderMode,
@@ -73,6 +74,111 @@ def test_value_arg_is_enforced_from_call_kwargs():
 
     with pytest.raises(BoundaryViolation):
         wire_transfer(account_id="acct_1", amount=50_000)
+
+
+def test_numeric_string_ceiling_blocks_decorated_tool_before_dispatch():
+    boundary = Boundary(
+        agent_name="agent",
+        autonomy=AutonomyLevel.AUTONOMOUS,
+        permissions=[
+            ToolPermission("wire_transfer", access_mode=AccessMode.EXECUTE, max_value=1000.0)
+        ],
+    )
+    calls = []
+
+    @guarded_tool(
+        boundary,
+        tool_name="wire_transfer",
+        access_mode=AccessMode.EXECUTE,
+        value_arg="amount",
+    )
+    def wire_transfer(amount):
+        calls.append(amount)
+
+    with pytest.raises(BoundaryViolation):
+        wire_transfer("999999")
+    assert calls == []
+
+
+def test_decorator_operation_default_is_not_overridden_by_none_argument():
+    boundary = Boundary(
+        agent_name="agent",
+        autonomy=AutonomyLevel.AUTONOMOUS,
+        permissions=[
+            ToolPermission(
+                "tool",
+                access_mode=AccessMode.READ_ONLY,
+                allowed_operations=frozenset({"read"}),
+            )
+        ],
+    )
+
+    @guarded_tool(boundary, tool_name="tool", operation="delete")
+    def tool(operation=None):
+        return "executed"
+
+    with pytest.raises(BoundaryViolation) as exc_info:
+        tool()
+    assert exc_info.value.rule == "OPERATION_BLOCKED"
+
+
+def test_guarded_tool_redacts_sensitive_bound_arguments_from_audit():
+    class RecordingSink:
+        def __init__(self):
+            self.events = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+    sink = RecordingSink()
+    boundary = Boundary(
+        agent_name="agent",
+        autonomy=AutonomyLevel.AUTONOMOUS,
+        permissions=[ToolPermission("tool", access_mode=AccessMode.READ_ONLY)],
+        audit=AuditTrail(sinks=[sink]),
+    )
+
+    @guarded_tool(boundary, tool_name="tool")
+    def tool(password, api_key, ordinary):
+        return "ok"
+
+    tool("secret-value", "key-value", "visible")
+    metadata = sink.events[-1].metadata["args"]
+    assert metadata == {
+        "password": "<redacted>",
+        "api_key": "<redacted>",
+        "ordinary": "'visible'",
+    }
+
+
+def test_guarded_tool_supports_custom_redaction_and_value_suppression():
+    class RecordingSink:
+        def __init__(self):
+            self.events = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+    sink = RecordingSink()
+    boundary = Boundary(
+        agent_name="agent",
+        autonomy=AutonomyLevel.AUTONOMOUS,
+        permissions=[ToolPermission("tool", access_mode=AccessMode.READ_ONLY)],
+        audit=AuditTrail(sinks=[sink]),
+    )
+
+    @guarded_tool(
+        boundary,
+        tool_name="tool",
+        sensitive_args=frozenset({"ssn"}),
+        log_arg_values=False,
+    )
+    def tool(ssn, count):
+        return "ok"
+
+    tool("123-45-6789", 7)
+    metadata = sink.events[-1].metadata["args"]
+    assert metadata == {"ssn": "<redacted>", "count": "<int>"}
 
 
 # ---------------------------------------------------------------------------
