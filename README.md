@@ -168,7 +168,34 @@ reasoning loop has to remember to call.
 
 Install with the LangChain extra: `pip install toolboundary[langchain]`
 
+### 3. CrewAI tools
+
+```python
+from toolboundary.integrations.crewai import guard_tools
+from crewai import Crew
+from toolboundary import AccessMode
+
+guarded_tools = guard_tools(
+    [read_db_tool, wire_transfer_tool],
+    boundary,
+    access_mode=AccessMode.READ_ONLY,
+    overrides={
+        "wire_transfer_tool": {
+            "access_mode": AccessMode.EXECUTE,
+            "value_arg": "amount",
+        },
+    },
+)
+
+crew = Crew(
+    agents=[agent],
+    tasks=[task],
+)
+
+```
+
 ## External authorization providers (introduced in v1.0.2)
+
 
 ToolBoundary can optionally consult an external authorization provider before dispatching a tool call. The provider adds a second gate — it can never weaken a local policy decision.
 
