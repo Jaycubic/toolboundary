@@ -2,6 +2,20 @@
 
 All notable changes to ToolBoundary are documented here.
 
+## [1.0.4] - Unreleased
+
+### Added
+
+- Add an optional CrewAI adapter with `guard_tool` and `guard_tools`.
+- Enforce ToolBoundary authorization in CrewAI's synchronous `_run` and asynchronous
+  `_arun` execution paths, including structured-tool invocation.
+- Normalize positional arguments against the wrapped tool's signature before evaluating
+  configured value and record-count limits.
+- Support ToolBoundary's provider authorization and execution-evidence lifecycle for
+  CrewAI tool calls when a provider is configured.
+- Add CrewAI integration tests for allowed and denied calls, value limits, async calls,
+  multiple tools, structured-tool invocation, positional arguments, and provider evidence.
+
 ## [1.0.3] - 2026-10-20
 
 ### Security
