@@ -34,6 +34,7 @@ Quickstart
 
 For a decorator-based approach, see `toolboundary.guarded_tool`.
 For LangChain, see `toolboundary.integrations.langchain`.
+For CrewAI, see `toolboundary.integrations.crewai` (install the optional `crewai` extra).
 For external authorization providers, see `toolboundary.provider`.
 """
 
@@ -64,7 +65,7 @@ from .provider import (
     ProviderReceipt,
 )
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 __all__ = [
     "__version__",
