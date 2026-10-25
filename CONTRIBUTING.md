@@ -13,7 +13,7 @@ git clone https://github.com/Jaycubic/toolboundary.git
 cd toolboundary
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e ".[dev,langchain,redis]"
+pip install -e ".[dev,langchain,crewai,redis]"
 ```
 
 ## Running tests
@@ -58,6 +58,7 @@ src/toolboundary/
     decorators.py            # @guarded_tool (provider-aware)
     integrations/
         langchain.py         # LangChain BaseTool wrapping (provider-aware)
+        crewai.py            # CrewAI BaseTool wrapping (provider-aware)
         agentkey.py          # AgentKey provider adapter (optional integration)
 ```
 
@@ -100,10 +101,10 @@ These are scoped, valuable, and don't require redesigning anything:
   provider-specific code under `integrations/` with an optional extra in
   `pyproject.toml`.
 - **Additional framework integrations** — mirror the structure of
-  `integrations/langchain.py` and `integrations/agentkey.py`: wrap the framework's
-  actual tool-execution call site and use the same `authorize_call()` /
-  `record_execution()` orchestration as the existing integrations. CrewAI remains
-  under review in PR #11; AutoGen is tracked in issue #15.
+  `integrations/langchain.py`, `integrations/crewai.py`, and
+  `integrations/agentkey.py`: wrap the framework's actual tool-execution call site
+  and use the same `authorize_call()` / `record_execution()` orchestration as the
+  existing integrations. AutoGen is tracked in issue #15.
 - **A minimal local dashboard** — a single-file script that tails a
   `JSONLFileSink` log and renders a simple live view. Should have zero
   required dependencies beyond the standard library, in keeping with the
