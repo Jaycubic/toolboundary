@@ -200,6 +200,50 @@ something the agent's reasoning loop has to remember to invoke.
 
 ---
 
+## `toolboundary.integrations.crewai`
+
+Requires `pip install 'toolboundary[crewai]'`. The CrewAI adapter is optional;
+the core `toolboundary` package does not require CrewAI.
+
+```python
+from toolboundary import AccessMode
+from toolboundary.integrations.crewai import guard_tool, guard_tools
+
+guarded_tool = guard_tool(
+    transfer_tool,
+    boundary,
+    access_mode=AccessMode.EXECUTE,
+    value_arg="amount",
+)
+
+guarded_tools = guard_tools(
+    [read_tool, transfer_tool],
+    boundary,
+    access_mode=AccessMode.READ_ONLY,
+    overrides={
+        "transfer_tool": {
+            "access_mode": AccessMode.EXECUTE,
+            "value_arg": "amount",
+        },
+    },
+)
+```
+
+- `guard_tool(tool, boundary, **kwargs)` → wraps one CrewAI `BaseTool`.
+- `guard_tools(tools, boundary, access_mode=..., overrides={...})` → wraps a list
+  of CrewAI tools with optional per-tool overrides keyed by the original tool name.
+- Authorization runs inside the wrapped tool's synchronous `_run` and asynchronous
+  `_arun` paths, including CrewAI structured-tool invocation. Positional arguments
+  are normalized against the original tool signature before configured value or
+  record-count arguments are evaluated.
+- When an external provider is configured on the boundary, the adapter uses the
+  existing provider authorization and execution-evidence lifecycle.
+
+The integration wraps the actual tool execution path; it is not a substitute for
+restricting credentials or preventing code from calling an unwrapped implementation.
+
+---
+
 ## External Authorization Providers
 
 ### `Boundary` provider parameters
