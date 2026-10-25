@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "toolboundary"
 dynamic = ["version"]
-description = "Local runtime security and policy enforcement for AI agents and LLM tool calls, with provider-neutral authorization, evidence, and optional Redis backends."
+description = "Local runtime security and policy enforcement for AI agents and LLM tool calls, with optional LangChain and CrewAI integrations, provider-neutral authorization, evidence, and Redis backends."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = [
     "ai-agents", "agent-security", "ai-agent-security", "llm", "llm-security",
-    "langchain", "ai-governance", "zero-trust", "guardrails", "ai-guardrails",
+    "langchain", "crewai", "ai-governance", "zero-trust", "guardrails", "ai-guardrails",
     "agent-guardrails", "tool-calling", "tool-security", "agent-authorization",
     "runtime-policy", "human-in-the-loop", "autonomous-agents", "python-security"
 ]
