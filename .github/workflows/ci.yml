@@ -24,6 +24,10 @@ jobs:
       - name: Install package with dev + langchain extras
         run: pip install -e ".[dev,langchain]"
 
+      - name: Install CrewAI extra (Python 3.10+)
+        if: matrix.python-version != '3.9'
+        run: pip install -e ".[crewai]"
+
       - name: Lint with ruff
         run: ruff check src tests
 
