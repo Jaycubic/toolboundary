@@ -12,7 +12,7 @@ ToolBoundary enforces tool permissions, operation allow-lists, rate limits, appr
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
 HTTP proxying for AI agents and LLM applications.
 
-**Latest release: [v1.0.3](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.3)** ·
+**Current development version: v1.0.4 (pending publication)** · Latest published release: [v1.0.3](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.3) ·
 [Install from PyPI](https://pypi.org/project/toolboundary/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
@@ -24,6 +24,20 @@ with the rest of your code.
 ```bash
 pip install toolboundary
 ```
+
+## What's new in v1.0.4
+
+ToolBoundary v1.0.4 adds an optional CrewAI integration, allowing authorization to run inside CrewAI's actual tool-execution path rather than relying on an agent to remember a separate policy check.
+
+### CrewAI integration
+
+- **Guard individual or multiple CrewAI tools** with `guard_tool` and `guard_tools`.
+- **Authorize synchronous and asynchronous execution** in the wrapped tool's `_run` / `_arun` paths, including structured-tool invocation.
+- **Apply per-tool policies** such as access mode and numeric value limits, including positional arguments normalized against the original tool signature.
+- **Keep framework dependencies optional** — install `toolboundary[crewai]` to use the adapter; the core package remains dependency-free.
+- **Provider-aware execution** uses ToolBoundary's existing authorization and execution-evidence lifecycle when an external provider is configured.
+
+Install the optional integration with `pip install 'toolboundary[crewai]'`.
 
 ## What's new in v1.0.3
 
@@ -357,8 +371,7 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
 - **Loud by default.** Denials raise exceptions, not silent `False` returns that are
   easy to accidentally ignore.
 - **Framework-agnostic core, framework-specific adapters.** The core `Boundary` has
-  zero dependencies. Framework integrations (LangChain today; more welcome via PR) are
-  optional extras.
+  zero dependencies. Framework integrations for LangChain and CrewAI are optional extras.
 - **Local authority, optional extension.** External providers add evidence and stricter
   gates but never override local policy. ToolBoundary works identically with or without
   a provider configured.
@@ -370,7 +383,7 @@ it does *not* do is more important than what it does:
 
 - **It cannot stop an agent that bypasses it entirely.** If your agent's code has any
   path that calls a tool's real implementation directly — instead of through a
-  `@guarded_tool`-wrapped function or a `guard_tool`-wrapped LangChain tool — that call
+  `@guarded_tool`-wrapped function or a `guard_tool`-wrapped LangChain / CrewAI tool — that call
   is not evaluated. ToolBoundary governs the doors you route through it; it is not a
   network firewall.
 - **It is not a substitute for credential scoping.** If the underlying API key or
@@ -404,8 +417,9 @@ in addition to ToolBoundary, not instead of it.
 
 ```bash
 pip install toolboundary                # core, zero dependencies
-pip install toolboundary[langchain]     # + LangChain integration
-pip install toolboundary[redis]         # + shared Redis rate limiter / token store
+pip install 'toolboundary[langchain]'   # + LangChain integration
+pip install 'toolboundary[crewai]'      # + CrewAI integration
+pip install 'toolboundary[redis]'       # + shared Redis rate limiter / token store
 ```
 
 ## Contributing
@@ -414,7 +428,7 @@ Issues and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas that would make great first contributions:
 - Custom `EvidenceProvider` implementations for popular platforms
-- CrewAI / AutoGen / LangGraph integrations (mirroring `integrations/langchain.py`)
+- AutoGen / LangGraph integrations (mirroring the existing optional framework adapters)
 - A minimal read-only local dashboard that tails a `JSONLFileSink` log
 
 ## License
