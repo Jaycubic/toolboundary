@@ -1,5 +1,7 @@
 # API Reference
 
+This reference documents the public API in the published ToolBoundary v1.0.4 release.
+
 ## `toolboundary.Boundary`
 
 The core policy object. One `Boundary` instance represents the maximum
