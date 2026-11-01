@@ -12,7 +12,7 @@ ToolBoundary enforces tool permissions, operation allow-lists, rate limits, appr
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
 HTTP proxying for AI agents and LLM applications.
 
-**Current development version: v1.0.4 (pending publication)** · Latest published release: [v1.0.3](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.3) ·
+**Latest release: [v1.0.4](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.4)** ·
 [Install from PyPI](https://pypi.org/project/toolboundary/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
@@ -137,7 +137,7 @@ Set the environment variable your `Boundary` was configured with, and every futu
 call for that agent is denied immediately — no restart required, no code change,
 no separate dashboard to log into.
 
-## Two ways to enforce the boundary
+## Ways to enforce the boundary
 
 ### 1. Decorator (plain Python functions)
 
