@@ -431,6 +431,8 @@ Ideas that would make great first contributions:
 - AutoGen / LangGraph integrations (mirroring the existing optional framework adapters)
 - A minimal read-only local dashboard that tails a `JSONLFileSink` log
 
+See [`examples/policy_hooks.py`](examples/policy_hooks.py) for working examples of time-of-day gates, environment restrictions, network-aware checks, and a dependency-light external policy engine built against the `EvidenceProvider` protocol. Run it directly: `python examples/policy_hooks.py`.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).

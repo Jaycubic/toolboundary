@@ -15,6 +15,7 @@ env/
 
 # Testing / coverage
 .pytest_cache/
+temp_auto_push.bat
 .coverage
 .coverage.*
 coverage.xml
@@ -23,7 +24,6 @@ htmlcov/
 .ruff_cache/
 
 # Editors
-.vscode/
 .idea/
 *.swp
 
@@ -33,3 +33,5 @@ htmlcov/
 # AgentGuard runtime artifacts (audit logs from examples/local testing)
 *.jsonl
 agentguard-audit.jsonl
+.gitignore
+branch_structure.json
