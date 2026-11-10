@@ -134,7 +134,8 @@ class UpstreamRoute:
 
     ``required_agent`` restricts the route to tokens issued for one agent.
     ``require_request_binding`` rejects tokens not bound to the exact method,
-    path and body; use it whenever limits depend on the request contents.
+    path and body. The caller still declares any policy values, so use
+    `toolboundary.gateway` if a compromised agent is in your threat model.
     """
 
     tool_name: str
@@ -340,7 +341,7 @@ def _make_handler(enforcer: NetworkEnforcer) -> type[http.server.BaseHTTPRequest
             if len(values) > 1:
                 return None
             raw = (values[0] if values else "0").strip()
-            return int(raw) if raw.isascii() and raw.isdigit() else None
+            return int(raw) if len(raw) <= 20 and raw.isascii() and raw.isdigit() else None
 
         def _handle(self) -> None:
             # Path convention: /<tool_name>/<rest-of-path>

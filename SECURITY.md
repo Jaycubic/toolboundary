@@ -52,6 +52,8 @@ The following project components and security properties are in scope:
   prevention (`toolboundary.tokens`)
 - Network proxy routing, upstream validation, request handling, and token
   enforcement (`toolboundary.network`)
+- Policy gateway authentication, request rules, value extraction, and credential
+  handling (`toolboundary.gateway`)
 - Audit handling and sensitive-argument redaction (`toolboundary.audit`,
   `toolboundary.decorators`)
 - Framework adapters and their enforcement paths:

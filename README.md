@@ -412,6 +412,13 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
   gates but never override local policy. ToolBoundary works identically with or without
   a provider configured.
 
+## Protecting against a compromised agent
+
+Available from v1.1.0. `toolboundary.gateway` runs policy outside the agent's process. The agent
+holds only a key, every request must match a rule you wrote, limits are read from the real
+request, and tool credentials stay in the gateway. It needs the right deployment to be effective:
+see the [gateway guide](docs/GATEWAY.md).
+
 ## Known limitations — please read this
 
 ToolBoundary is an **in-process, application-layer** library. Being explicit about what
@@ -446,10 +453,14 @@ it does *not* do is more important than what it does:
 
 - **The token secret must stay away from the agent.** Tokens use a shared HMAC secret, so
   code in a process holding the `TokenIssuer` can mint tokens without calling
-  `Boundary.check()`. To defend against a compromised agent, run the `Boundary`, issuer and
-  proxy in a separate process.
-- **Declared access modes are trusted.** `@guarded_tool` and `guard_tools` default to
-  `READ_ONLY`, so set the real access mode on every tool that writes or executes.
+  `Boundary.check()`, and token request binding can't stop the caller declaring a false
+  `value`. To defend against a compromised agent, use the
+  [policy gateway](docs/GATEWAY.md).
+- **Declared access modes are trusted.** Omitting `access_mode` when guarding a tool warns
+  and falls back to `READ_ONLY`, and it will be required in 2.0. The library can't check that a
+  declared mode matches what a tool really does.
+- **Allowed actions can still be misused.** Even with the gateway, a prompt-injected agent can
+  do anything its policy permits, so keep permissions narrow and limits low.
 
 If your threat model requires guaranteeing that a compromised agent *physically
 cannot* reach a tool's network endpoint except through an approved path, you need a

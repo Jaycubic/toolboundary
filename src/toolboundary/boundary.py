@@ -451,9 +451,10 @@ class Boundary:
         use -- see `toolboundary.tokens.TokenIssuer` for details. The token
         also carries `access_mode`, so the proxy refuses write methods for a
         read-only call. Pass `request_method`, `request_path` and
-        `request_body` to bind it to one exact request; together with
-        `UpstreamRoute.require_request_binding`, that stops limits being
-        checked against one value and sent with another.
+        `request_body` to bind it to one exact request, so the request can't
+        be changed after approval. The caller still declares `value`, so this
+        does not stop a compromised caller from declaring a false one. Use
+        `toolboundary.gateway` to evaluate the real request instead.
         """
         if self._token_issuer is None:
             raise ConfigurationError(
@@ -886,9 +887,10 @@ class Boundary:
 
     def _check_value_limit(self, ctx: CallContext, permission: ToolPermission) -> None:
         if ctx.value is None:
-            if self.strict_limits and permission.max_value is not None:
+            has_limit = permission.max_value is not None or permission.min_value is not None
+            if self.strict_limits and has_limit:
                 raise BoundaryViolation(
-                    f"A value is required to enforce max_value for tool {ctx.tool_name!r}.",
+                    f"A value is required to enforce value limits for tool {ctx.tool_name!r}.",
                     agent_name=ctx.agent_name,
                     tool_name=ctx.tool_name,
                     operation=ctx.operation,

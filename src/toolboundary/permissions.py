@@ -12,10 +12,24 @@ even if the general access_mode would otherwise allow them.
 from __future__ import annotations
 
 import unicodedata
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from .enums import AccessMode
+
+
+def resolve_declared_access_mode(access_mode: AccessMode | None, tool_name: str) -> AccessMode:
+    """Return the declared mode, warning when an omitted one falls back to READ_ONLY."""
+    if access_mode is not None:
+        return access_mode
+    warnings.warn(
+        f"Tool {tool_name!r} was guarded without an access_mode and is being treated as "
+        "READ_ONLY. Pass access_mode explicitly; it will be required in ToolBoundary 2.0.",
+        FutureWarning,
+        stacklevel=3,
+    )
+    return AccessMode.READ_ONLY
 
 
 def normalize_operation(operation: str) -> str:

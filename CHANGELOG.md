@@ -2,6 +2,31 @@
 
 All notable changes to ToolBoundary are documented here.
 
+## [1.1.0] - Unreleased
+
+### Added
+
+- Add `toolboundary.gateway`, a policy gateway that runs outside the agent's process. Agents
+  authenticate with a key and cannot create their own approvals.
+- Add `GatewayRule`, which denies by default and reads operation, access mode, value and
+  record count from the request being forwarded instead of from agent claims.
+- Add gateway-held upstream credentials, so agents never need them.
+- Add `GatewayClient` for agents, and `python -m toolboundary.gateway` for running a gateway
+  in its own process.
+- Add `docs/GATEWAY.md` and `examples/policy_gateway.py`.
+
+### Changed
+
+- Guarding a tool without `access_mode` now raises `FutureWarning`. It still falls back to
+  `READ_ONLY`, and `access_mode` will be required in ToolBoundary 2.0.
+- `strict_limits=True` now also requires a value when a tool has only a `min_value`.
+
+### Fixed
+
+- Correct documentation that implied token request binding stops a compromised agent from
+  declaring a false value. It only stops a request being changed after approval.
+- Reject oversized `Content-Length` header values cleanly in the network proxy.
+
 ## [1.0.5] - 2026-11-10
 
 ### Security

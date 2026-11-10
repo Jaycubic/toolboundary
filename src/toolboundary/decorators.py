@@ -29,6 +29,7 @@ from ._arguments import normalize_call_arguments
 from ._redact import redact_args
 from .boundary import Boundary
 from .enums import AccessMode
+from .permissions import resolve_declared_access_mode
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -38,7 +39,7 @@ def guarded_tool(
     *,
     tool_name: str | None = None,
     operation: str | None = None,
-    access_mode: AccessMode = AccessMode.READ_ONLY,
+    access_mode: AccessMode | None = None,
     value_arg: str | None = None,
     record_count_arg: str | None = None,
     correlation_id_arg: str | None = None,
@@ -64,7 +65,8 @@ def guarded_tool(
         decorated function is called with a keyword argument named
         "operation", that value takes precedence over this default.
     access_mode:
-        The access mode this call represents. READ_ONLY by default.
+        The access mode this call represents. Omitting it warns and falls back
+        to READ_ONLY; it will be required in ToolBoundary 2.0.
     value_arg / record_count_arg / correlation_id_arg:
         Names of keyword arguments on the decorated function whose runtime
         values should be forwarded into the boundary check as `value`,
@@ -92,6 +94,7 @@ def guarded_tool(
 
     def decorator(func: F) -> F:
         resolved_tool_name = tool_name or func.__name__
+        declared_access_mode = resolve_declared_access_mode(access_mode, resolved_tool_name)
 
         def authorize(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Any, str | None]:
             """Evaluate the call; returns (authorization or None, correlation id)."""
@@ -118,7 +121,7 @@ def guarded_tool(
                 boundary.check(
                     resolved_tool_name,
                     operation=resolved_operation,
-                    access_mode=access_mode,
+                    access_mode=declared_access_mode,
                     value=resolved_value,
                     record_count=resolved_record_count,
                     correlation_id=resolved_correlation_id,
@@ -129,7 +132,7 @@ def guarded_tool(
             authorization = boundary.authorize_call(
                 tool_name=resolved_tool_name,
                 operation=resolved_operation,
-                access_mode=access_mode,
+                access_mode=declared_access_mode,
                 arguments=dict(call_kwargs),
                 value=resolved_value,
                 record_count=resolved_record_count,

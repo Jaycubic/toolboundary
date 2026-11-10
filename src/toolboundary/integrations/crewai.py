@@ -20,6 +20,7 @@ except ImportError as exc:  # pragma: no cover - optional dependency
     ) from exc
 
 from toolboundary import AccessMode, Boundary
+from toolboundary.permissions import resolve_declared_access_mode
 
 
 def guard_tool(
@@ -28,7 +29,7 @@ def guard_tool(
     *,
     tool_name: str | None = None,
     operation: str | None = None,
-    access_mode: AccessMode = AccessMode.READ_ONLY,
+    access_mode: AccessMode | None = None,
     value_arg: str | None = None,
     record_count_arg: str | None = None,
     resource: str | None = None,
@@ -39,6 +40,7 @@ def guard_tool(
     """Wrap a CrewAI tool with ToolBoundary authorization."""
 
     resolved_name = tool_name or tool.name
+    declared_access_mode = resolve_declared_access_mode(access_mode, resolved_name)
 
     class _GuardedTool(BaseTool):
         name: str = tool.name
@@ -73,7 +75,7 @@ def guard_tool(
             boundary.check(
                 resolved_name,
                 operation=operation,
-                access_mode=access_mode,
+                access_mode=declared_access_mode,
                 value=arguments.get(value_arg) if value_arg else None,
                 record_count=(
                     arguments.get(record_count_arg)
@@ -87,7 +89,7 @@ def guard_tool(
             return boundary.authorize_call(
                 tool_name=resolved_name,
                 operation=operation,
-                access_mode=access_mode,
+                access_mode=declared_access_mode,
                 arguments=arguments,
                 value=arguments.get(value_arg) if value_arg else None,
                 record_count=(
@@ -165,7 +167,7 @@ def guard_tools(
     tools: list[BaseTool],
     boundary: Boundary,
     *,
-    access_mode: AccessMode = AccessMode.READ_ONLY,
+    access_mode: AccessMode | None = None,
     overrides: dict[str, dict[str, Any]] | None = None,
 ) -> list[BaseTool]:
     """Wrap multiple CrewAI tools with optional per-tool overrides."""

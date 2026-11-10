@@ -395,6 +395,8 @@ none of the above can see or stop it.
    to `check_and_authorize()`. `request_path` is the path after `/<tool_name>/`, including
    any query string. Set `require_request_binding=True` on the `UpstreamRoute` to reject
    tokens without that binding, and `required_agent` to restrict a route to one agent.
+   Binding stops a request being changed after approval, but the caller still declares
+   `value`, so it doesn't stop a compromised caller declaring a false one.
 
 ```python
 from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode
@@ -467,6 +469,23 @@ enforcer = NetworkEnforcer(issuer, routes, token_store=store)
 Both classes accept either `redis_url` or an injected `client` (any
 redis-py-compatible client). They fail closed on Redis outages by default
 — see the module docstring in `toolboundary.redis_backend` for why.
+
+---
+
+## `toolboundary.gateway` (optional, v1.1.0)
+
+Runs policy outside the agent's process, for protection against a compromised agent. See the
+[gateway guide](GATEWAY.md) for setup and deployment requirements.
+
+| Name | Purpose |
+|---|---|
+| `PolicyGateway(agents, routes, ...)` | The service. Use `serve_forever()` in a dedicated process, or `python -m toolboundary.gateway --app module:name`. |
+| `GatewayAgent(boundary, key)` | An agent's identity. The `Boundary` must use `strict_limits=True`. Only a hash of the key is kept. |
+| `GatewayRoute(tool_name, upstream_base_url, rules, ...)` | A tool, its allowed requests, and optional `credential_headers` and `forwarded_headers`. |
+| `GatewayRule(method, path, access_mode, ...)` | One allowed request, with optional `operation`, `value`, `record_count` and `allowed_query`. |
+| `json_field`, `json_array_length`, `query_param`, `constant` | Extractors that read `value` or `record_count` from the request. |
+| `GatewayClient(base_url, agent_key, ...)` | The agent's client. `request()` returns a `GatewayResponse`, whose `denied_reason` is set for gateway denials. |
+| `generate_agent_key()` | Creates a random agent key. |
 
 ---
 

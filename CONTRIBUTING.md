@@ -55,6 +55,7 @@ src/toolboundary/
     audit.py                 # AuditTrail and sinks (Logging, JSONL, Webhook)
     tokens.py                # AuthorizationToken, TokenIssuer (network enforcement)
     network.py               # NetworkEnforcer proxy (optional, stdlib-only)
+    gateway.py               # PolicyGateway, out-of-process enforcement (optional, stdlib-only)
     _rate_limiter.py         # internal sliding-window rate limiter
     redis_backend.py         # optional Redis rate limiter / token store
     decorators.py            # @guarded_tool (provider-aware)
