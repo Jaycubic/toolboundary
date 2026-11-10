@@ -1,6 +1,6 @@
 # API Reference
 
-This reference documents the public API in the published ToolBoundary v1.0.4 release.
+This reference documents the public API in the published ToolBoundary v1.0.5 release.
 
 ## `toolboundary.Boundary`
 
@@ -19,6 +19,7 @@ Boundary(
     max_actions_per_hour: int | None = None,
     kill_switch: bool = False,
     kill_switch_env: str | None = None,
+    kill_switch_file: str | os.PathLike[str] | None = None,
     valid_from: float | None = None,
     valid_to: float | None = None,
     audit: AuditTrail | None = None,
@@ -40,7 +41,8 @@ Boundary(
 | `environment` | The environment this boundary is currently running in (e.g. `"DEV"`, `"PRODUCTION"`). |
 | `max_actions_per_hour` | Global sliding-window rate limit across all tools for this agent. |
 | `kill_switch` | In-process boolean. Set `True` (or call `engage_kill_switch()`) to deny everything immediately. |
-| `kill_switch_env` | Name of an environment variable checked on **every** call. Lets an operator halt a running agent externally (`export MY_KILL_SWITCH=1`) without a restart. |
+| `kill_switch_env` | Name of an environment variable checked on every call. Only effective if set before the process starts or changed from inside it. A running process's environment can't be changed externally. |
+| `kill_switch_file` | Path checked on every call. Creating the file halts a running agent without a restart; deleting it resumes. If the path can't be checked, the switch counts as engaged. |
 | `valid_from` / `valid_to` | Unix timestamps bounding when this boundary is valid at all. |
 | `audit` | An `AuditTrail` instance. Defaults to logging via stdlib `logging`. |
 | `policy_hooks` | List of callables `(CallContext) -> str | None` for custom logic. Return a string to deny with that reason, `None` to allow. |
@@ -344,12 +346,14 @@ AgentKey's authorization and evidence API.
 from toolboundary.integrations.agentkey import AgentKeyProvider
 
 provider = AgentKeyProvider(
-    client=agentkey_client,     # AgentKey client instance (or mock)
+    client=agentkey_client,     # required: exposes authorize() and record()
     session_id="my-session",    # optional, auto-generated if omitted
 )
 ```
 
-Without a `client`, runs in standalone demo mode (no network required).
+Without a usable `client`, the constructor raises `ConfigurationError`. `api_key` and
+`endpoint` don't create a client. For local demos only, `AgentKeyProvider(simulate=True)`
+allows every call and marks its grants and receipts as simulated.
 
 ---
 
@@ -372,7 +376,8 @@ none of the above can see or stop it.
    single-use, HMAC-signed `AuthorizationToken`s.
 2. `Boundary.check_and_authorize(...)` runs the normal `check()`
    evaluation, and on success, asks the configured `token_issuer` for a
-   token scoped to exactly that `(agent_name, tool_name, operation)`.
+   token scoped to exactly that `(agent_name, tool_name, operation)` and carrying the
+   call's `access_mode`.
 3. `toolboundary.network.NetworkEnforcer` runs a small local HTTP proxy.
    Real tool endpoints are registered as `UpstreamRoute`s. The proxy only
    forwards a request if it carries a valid, unexpired, not-yet-used token
@@ -381,7 +386,15 @@ none of the above can see or stop it.
 
    The proxy rejects paths that attempt to escape the configured upstream path
    or change its host. Request bodies are limited to 10 MiB by default; pass
-   `max_body_bytes` to `NetworkEnforcer` to change that limit.
+   `max_body_bytes` to `NetworkEnforcer` to change that limit. Upstream responses are
+   limited to 50 MiB (`max_response_bytes`), idle connections time out after 30 seconds
+   (`socket_timeout`), and upstream redirects are returned to the client, not followed.
+
+   Tokens without `WRITE` access or higher can only use `GET`. To stop a token being
+   spent on a different request, pass `request_method`, `request_path` and `request_body`
+   to `check_and_authorize()`. `request_path` is the path after `/<tool_name>/`, including
+   any query string. Set `require_request_binding=True` on the `UpstreamRoute` to reject
+   tokens without that binding, and `required_agent` to restrict a route to one agent.
 
 ```python
 from toolboundary import Boundary, ToolPermission, AutonomyLevel, AccessMode
@@ -420,6 +433,10 @@ deployment should also ensure the agent process **cannot reach
 or network policy that only allows outbound traffic to the loopback
 proxy. `NetworkEnforcer` makes bypass require an explicit, auditable
 infrastructure decision to open a hole, rather than a silent code path.
+
+Tokens use a shared HMAC secret, so any process holding the `TokenIssuer` can mint them. To
+defend against a compromised agent, run the `Boundary`, issuer and proxy in a separate
+process and never give the agent the secret.
 
 ### Performance
 

@@ -12,7 +12,7 @@ ToolBoundary enforces tool permissions, operation allow-lists, rate limits, appr
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
 HTTP proxying for AI agents and LLM applications.
 
-**Latest release: [v1.0.4](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.4)** ·
+**Latest release: [v1.0.5](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.5)** ·
 [Install from PyPI](https://pypi.org/project/toolboundary/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
@@ -24,6 +24,38 @@ with the rest of your code.
 ```bash
 pip install toolboundary
 ```
+
+## What's new in v1.0.5
+
+ToolBoundary v1.0.5 is a security release, and every user should upgrade.
+
+- **A kill switch that can stop a running agent** — `kill_switch_file` is checked on every
+  call, so creating the file halts the agent immediately.
+- **Fail-closed AgentKey setup** — `AgentKeyProvider` now needs a real client. The demo mode
+  that allows every call must be requested with `simulate=True`.
+- **Tighter proxy tokens** — tokens carry the call's access mode, so read-only tokens can't
+  use write methods. They can also be bound to one exact method, path and body.
+- **Limits apply however arguments arrive** — `max_value` and `max_records` now cover
+  positional LangChain input and `**kwargs` functions.
+- **Safer proxy behavior** — upstream redirects are returned rather than followed, and
+  response size and idle connections are capped.
+- **Harder-to-evade block-lists** — blocked operations match regardless of case, surrounding
+  spaces, or character width.
+- **Better secret handling** — nested secrets are redacted, and providers no longer receive
+  secret-named arguments.
+- **More accurate evidence** — async tools record their real outcome, and enforced provider
+  denials appear as `DENY` in the audit log.
+
+### Upgrade notes
+
+- `AgentKeyProvider()` without a client now raises `ConfigurationError`. Pass your client, or
+  `simulate=True` for demos only.
+- Proxy `POST`, `PUT`, `PATCH` and `DELETE` requests need a token with `WRITE` access or
+  higher. Pass the real `access_mode` to `check_and_authorize()`.
+- If you rely on the proxy following upstream redirects, your client must now follow them.
+- The `langchain` extra now requires a `langchain-core` release patched for CVE-2025-68664.
+- `kill_switch_env` is unchanged, but it only works if set before the process starts. Use
+  `kill_switch_file` for emergency stops.
 
 ## What's new in v1.0.4
 
@@ -114,7 +146,7 @@ boundary = Boundary(
     ],
     blocked_operations=frozenset({"delete_ticket"}),
     max_actions_per_hour=100,
-    kill_switch_env="TOOLBOUNDARY_KILL_SWITCH",
+    kill_switch_file="/var/run/toolboundary/support-agent.stop",
 )
 
 # Somewhere in your agent's tool-calling code:
@@ -130,12 +162,16 @@ deny, or approval-required — is written to a structured audit log automaticall
 ### Emergency stop
 
 ```bash
-export TOOLBOUNDARY_KILL_SWITCH=1
+touch /var/run/toolboundary/support-agent.stop
 ```
 
-Set the environment variable your `Boundary` was configured with, and every future
-call for that agent is denied immediately — no restart required, no code change,
-no separate dashboard to log into.
+Create the file your `Boundary` was configured with, and every future call for that
+agent is denied immediately — no restart required, no code change, no separate dashboard
+to log into. Delete the file to resume. If the file's status can't be checked, the switch
+counts as engaged.
+
+`kill_switch_env` is also available, but a running process's environment can't be changed
+from outside, so it only works if set before the agent starts.
 
 ## Ways to enforce the boundary
 
@@ -325,7 +361,7 @@ Local policy check → DENY? → stop (provider never consulted)
 | Autonomy level | `AutonomyLevel.RECOMMEND_ONLY` / `HUMAN_APPROVAL_REQUIRED` / `LIMITED_AUTONOMOUS` / `AUTONOMOUS` / `QUARANTINED` |
 | Time-bounded validity | `valid_from=`, `valid_to=` |
 | Environment restriction | `allowed_environments=frozenset({"DEV", "TEST"})` |
-| Emergency kill switch | in-process flag or environment variable |
+| Emergency kill switch | in-process flag, kill-switch file, or startup environment variable |
 | Custom policy logic | `policy_hooks=[my_custom_check]` |
 | External authorization provider | `provider=my_provider, provider_mode=ProviderMode.ENFORCE` |
 | Exact-call binding with cryptographic digest | Automatic when a provider is configured |
@@ -407,6 +443,13 @@ it does *not* do is more important than what it does:
 - **Numeric ceilings need supplied values by default.** If the caller omits `value` or
   `record_count`, its configured maximum is not evaluated unless
   `Boundary(strict_limits=True)` is enabled.
+
+- **The token secret must stay away from the agent.** Tokens use a shared HMAC secret, so
+  code in a process holding the `TokenIssuer` can mint tokens without calling
+  `Boundary.check()`. To defend against a compromised agent, run the `Boundary`, issuer and
+  proxy in a separate process.
+- **Declared access modes are trusted.** `@guarded_tool` and `guard_tools` default to
+  `READ_ONLY`, so set the real access mode on every tool that writes or executes.
 
 If your threat model requires guaranteeing that a compromised agent *physically
 cannot* reach a tool's network endpoint except through an approved path, you need a

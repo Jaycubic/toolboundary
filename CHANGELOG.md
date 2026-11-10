@@ -2,6 +2,44 @@
 
 All notable changes to ToolBoundary are documented here.
 
+## [1.0.5] - 2026-11-10
+
+### Security
+
+- Add `kill_switch_file`, which halts an already-running agent and fails closed if it
+  cannot be checked. Correct documentation that claimed an environment variable could do this.
+- `AgentKeyProvider` no longer allows every call when no client is configured. Simulation
+  now requires `simulate=True`, and simulated grants and receipts are labelled.
+- Proxy tokens carry the call's access mode, and read-only tokens cannot use write methods.
+- Add optional token binding to the exact method, path and body, plus
+  `UpstreamRoute.require_request_binding` and `UpstreamRoute.required_agent`.
+- Enforce value and record limits for positional LangChain input and `**kwargs` functions.
+- Stop following upstream redirects, which could send credentials to another host.
+- Match blocked operations regardless of case, surrounding spaces, or character width.
+- Redact nested secrets, bearer values and more credential names from audit metadata.
+- Stop sending secret-named arguments to providers while the call digest still binds them.
+- Require a `langchain-core` release patched for CVE-2025-68664.
+- Pin GitHub Actions to commit SHAs and build packages outside the publishing job.
+
+### Fixed
+
+- Record the real outcome of async `@guarded_tool` functions.
+- Bind positional LangChain arguments into the call digest.
+- Audit enforced provider denials and outages as `DENY`.
+- Return 403 and call `on_denied` for tokens with malformed signatures or claims.
+- Make `InMemoryTokenStore` thread-safe.
+- Bound AgentKey pending-call retention.
+- Limit proxy response size and idle connections, and send one `Content-Length`.
+- Stop forwarding hop-by-hop headers to upstreams.
+- Make `guard_tool` work with LangChain `@tool` functions.
+- Report `recorded=False` when an AgentKey client has no `record()` method.
+
+### Changed
+
+- `AgentKeyProvider()` without a client now raises `ConfigurationError`.
+- Proxy write methods require a token with `WRITE` access or higher.
+- `Boundary` logs a warning when a provider runs in `ProviderMode.OBSERVE`.
+
 ## [1.0.4] - 2026-10-25
 
 ### Added
