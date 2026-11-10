@@ -33,8 +33,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections import OrderedDict
 from typing import Any
 
+from toolboundary.exceptions import ConfigurationError
 from toolboundary.provider import (
     ExecutionRecord,
     FrozenToolCall,
@@ -44,6 +46,9 @@ from toolboundary.provider import (
 )
 
 _logger = logging.getLogger("toolboundary.integrations.agentkey")
+
+# Two entries per call; bounds memory when calls are denied and never recorded.
+_MAX_PENDING_ENTRIES = 4096
 
 
 def _get_val(obj: Any, key: str, default: Any = None) -> Any:
@@ -68,15 +73,15 @@ class AgentKeyProvider:
         session_id: str | None = None,
         api_key: str | None = None,
         endpoint: str | None = None,
+        simulate: bool = False,
     ) -> None:
         """Initialize the AgentKey provider.
 
         Parameters
         ----------
         client:
-            Optional AgentKey client instance (or mock client for testing).
-            If omitted, a simulated in-process provider is used for local
-            demos without requiring network access or external credentials.
+            AgentKey client exposing ``authorize`` and ``record``. Required
+            unless ``simulate=True``.
         session_id:
             AgentKey session ID. If not supplied, an in-memory session ID is
             generated and shared between authorize() and record() calls.
@@ -84,13 +89,33 @@ class AgentKeyProvider:
             Optional AgentKey API key for client configuration.
         endpoint:
             Optional AgentKey API endpoint.
+        simulate:
+            Explicitly enable an in-process demo that allows every call and
+            records no real evidence. Never use it in production.
+
+        Raises
+        ------
+        ConfigurationError
+            If there is no usable client and ``simulate`` is not True. An
+            ``api_key`` or ``endpoint`` alone does not create a client.
         """
+        if not simulate and not callable(getattr(client, "authorize", None)):
+            raise ConfigurationError(
+                "AgentKeyProvider needs a client with an authorize() method. "
+                "api_key and endpoint do not create one. Pass simulate=True only for demos."
+            )
+        if simulate:
+            _logger.warning(
+                "AgentKeyProvider is in simulated mode: every call is allowed "
+                "and no real evidence is recorded."
+            )
+        self._simulate = simulate
         self._client = client
         self._session_id = session_id or f"ak-session-{uuid.uuid4().hex[:12]}"
         self._api_key = api_key
         self._endpoint = endpoint
         # Short-lived state to correlate authorize() call arguments with record()
-        self._pending_calls: dict[str, tuple[FrozenToolCall, str]] = {}
+        self._pending_calls: OrderedDict[str, tuple[FrozenToolCall, str]] = OrderedDict()
 
     @property
     def session_id(self) -> str:
@@ -101,6 +126,11 @@ class AgentKeyProvider:
     def pending_calls(self) -> dict[str, tuple[FrozenToolCall, str]]:
         """Pending calls waiting for execution recording."""
         return self._pending_calls
+
+    def _remember(self, key: str, value: tuple[FrozenToolCall, str]) -> None:
+        self._pending_calls[key] = value
+        while len(self._pending_calls) > _MAX_PENDING_ENTRIES:
+            self._pending_calls.popitem(last=False)
 
     def authorize(
         self,
@@ -133,7 +163,7 @@ class AgentKeyProvider:
             "metadata": metadata,
         }
 
-        if self._client is not None and hasattr(self._client, "authorize"):
+        if not self._simulate:
             # Call external or mock client
             try:
                 res = self._client.authorize(auth_payload)
@@ -142,7 +172,7 @@ class AgentKeyProvider:
 
             event_id = _get_val(res, "event_id") or f"ak-evt-{uuid.uuid4().hex[:12]}"
             attempt_id = _get_val(res, "attempt_id") or f"ak-att-{uuid.uuid4().hex[:12]}"
-            allowed = bool(_get_val(res, "allowed", False))
+            allowed = _get_val(res, "allowed", False) is True
             reason = _get_val(res, "reason")
             approval_required = bool(_get_val(res, "approval_required", False))
             approval_id = _get_val(res, "approval_id")
@@ -155,11 +185,11 @@ class AgentKeyProvider:
             reason = "Authorized by AgentKey (demo)"
             approval_required = False
             approval_id = None
-            res_metadata = {}
+            res_metadata = {"simulated": True}
 
         # Retain short-lived state for record() reconstruction
-        self._pending_calls[attempt_id] = (call, self._session_id)
-        self._pending_calls[event_id] = (call, self._session_id)
+        self._remember(attempt_id, (call, self._session_id))
+        self._remember(event_id, (call, self._session_id))
 
         grant_metadata: dict[str, Any] = {
             "session_id": self._session_id,
@@ -223,7 +253,7 @@ class AgentKeyProvider:
             "finished_at": execution.finished_at,
         }
 
-        if self._client is not None and hasattr(self._client, "record"):
+        if not self._simulate and callable(getattr(self._client, "record", None)):
             try:
                 try:
                     res = self._client.record(record_payload)
@@ -255,6 +285,14 @@ class AgentKeyProvider:
                     metadata={"error": str(exc), "session_id": sess_id},
                 )
 
+        if not self._simulate:
+            return ProviderReceipt(
+                recorded=False,
+                provider="agentkey",
+                signature=None,
+                metadata={"error": "client has no record() method", "session_id": sess_id},
+            )
+
         # Simulated standalone / demo mode
         evidence_id = f"ak-rec-{uuid.uuid4().hex[:12]}"
         return ProviderReceipt(
@@ -262,5 +300,5 @@ class AgentKeyProvider:
             provider="agentkey",
             evidence_id=evidence_id,
             signature=None,
-            metadata={"session_id": sess_id},
+            metadata={"session_id": sess_id, "simulated": True},
         )

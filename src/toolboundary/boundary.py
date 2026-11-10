@@ -22,7 +22,7 @@ import math
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from .tokens import AuthorizationToken, TokenIssuer
 
 from ._rate_limiter import SlidingWindowRateLimiter
+from ._redact import redact_structure
 from .audit import AuditTrail
 from .enums import AccessMode, AutonomyLevel, DecisionType, ViolationReason
 from .evidence import _UNSET, build_execution_record, freeze_with_digest
@@ -43,7 +44,7 @@ from .exceptions import (
     ProviderUnavailable,
     RateLimitExceeded,
 )
-from .permissions import ToolPermission
+from .permissions import ToolPermission, operation_is_blocked
 from .provider import (
     AuthorizationContext,
     EvidenceProvider,
@@ -138,6 +139,7 @@ class Boundary:
         max_actions_per_hour: int | None = None,
         kill_switch: bool = False,
         kill_switch_env: str | None = None,
+        kill_switch_file: str | os.PathLike[str] | None = None,
         valid_from: float | None = None,
         valid_to: float | None = None,
         audit: AuditTrail | None = None,
@@ -165,6 +167,7 @@ class Boundary:
         self.max_actions_per_hour = max_actions_per_hour
         self._kill_switch = kill_switch
         self._kill_switch_env = kill_switch_env
+        self._kill_switch_file = kill_switch_file
         self.valid_from = valid_from
         self.valid_to = valid_to
         self.audit = audit or AuditTrail()
@@ -188,22 +191,40 @@ class Boundary:
         self._provider = provider
         self._provider_mode = provider_mode
         self._policy_version = policy_version
+        if provider is not None and provider_mode == ProviderMode.OBSERVE:
+            _logger.warning(
+                "Boundary %r uses ProviderMode.OBSERVE: provider denials and outages "
+                "will not block tool calls. Use ProviderMode.ENFORCE to block them.",
+                agent_name,
+            )
 
     # -- kill switch -----------------------------------------------------
 
     @property
     def kill_switch_engaged(self) -> bool:
         """
-        Kill switch is engaged if either the in-memory flag is True, or the
-        configured environment variable is set to a truthy value.
+        Kill switch is engaged if the in-memory flag is True, the configured
+        kill-switch file exists, or the configured environment variable is
+        set to a truthy value.
 
-        Checking an environment variable on every call (rather than only at
-        construction time) means an operator can halt a running agent by
-        setting the env var externally, without restarting the process --
-        e.g. `export TOOLBOUNDARY_KILL_SWITCH=1` picked up on the next call.
+        To halt an already-running agent from outside its process, use
+        ``kill_switch_file``: it is checked on every call, so creating the
+        file takes effect immediately. An environment variable cannot do
+        this, because a running process's environment cannot be changed from
+        outside; ``kill_switch_env`` only applies if set before the process
+        starts or changed from inside it.
         """
         if self._kill_switch:
             return True
+        if self._kill_switch_file is not None:
+            try:
+                os.lstat(self._kill_switch_file)
+            except (FileNotFoundError, NotADirectoryError):
+                pass
+            except OSError:
+                return True  # Cannot tell whether the switch is set: fail closed.
+            else:
+                return True
         if self._kill_switch_env:
             val = os.environ.get(self._kill_switch_env, "")
             return val.strip().lower() in {"1", "true", "yes", "on"}
@@ -408,6 +429,9 @@ class Boundary:
         record_count: int | float | Decimal | str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        request_method: str | None = None,
+        request_path: str | None = None,
+        request_body: bytes | None = None,
     ) -> AuthorizationToken:
         """
         Like `check()`, but additionally issues a short-lived
@@ -424,7 +448,12 @@ class Boundary:
 
         The returned token authorizes exactly this (agent_name, tool_name,
         operation) tuple for a short window (default 30s) and exactly one
-        use -- see `toolboundary.tokens.TokenIssuer` for details.
+        use -- see `toolboundary.tokens.TokenIssuer` for details. The token
+        also carries `access_mode`, so the proxy refuses write methods for a
+        read-only call. Pass `request_method`, `request_path` and
+        `request_body` to bind it to one exact request; together with
+        `UpstreamRoute.require_request_binding`, that stops limits being
+        checked against one value and sent with another.
         """
         if self._token_issuer is None:
             raise ConfigurationError(
@@ -449,6 +478,10 @@ class Boundary:
             agent_name=self.agent_name,
             tool_name=tool_name,
             operation=operation,
+            access_mode=access_mode,
+            request_method=request_method,
+            request_path=request_path,
+            request_body=request_body,
         )
 
     # -- provider-aware authorization flow ---------------------------------
@@ -470,6 +503,7 @@ class Boundary:
         manifest_hash: str | None = None,
         approval_id: str | None = None,
         approval_state: str | None = None,
+        sensitive_args: frozenset[str] = frozenset(),
     ) -> AuthorizationContext:
         """Evaluate locally, freeze the call, and optionally consult a provider.
 
@@ -536,6 +570,11 @@ class Boundary:
         # Step 4: Compute digest and bind it.
         frozen = freeze_with_digest(frozen)
 
+        # The digest binds the real values; the provider never receives secrets.
+        frozen = replace(
+            frozen, arguments=redact_structure(arguments, extra_names=sensitive_args)
+        )
+
         # Step 5: No provider → local-only authorization.
         if self._provider is None:
             return AuthorizationContext(
@@ -550,6 +589,17 @@ class Boundary:
             provider_grant = self._provider.authorize(frozen, local_decision)
         except Exception as exc:  # noqa: BLE001
             if self._provider_mode == ProviderMode.ENFORCE:
+                self.audit.record(
+                    agent_name=self.agent_name,
+                    decision="DENY",
+                    message=f"{tool_name}.{operation or '*'} blocked: provider unavailable",
+                    tool_name=tool_name,
+                    operation=operation,
+                    access_mode=access_mode.value,
+                    reason_code=ViolationReason.PROVIDER_UNAVAILABLE.value,
+                    correlation_id=correlation_id,
+                    metadata={"call_digest": frozen.call_digest},
+                )
                 raise ProviderUnavailable(
                     f"Provider unavailable in enforce mode: {exc}",
                     agent_name=self.agent_name,
@@ -573,6 +623,20 @@ class Boundary:
         # Step 7: Provider deny handling.
         if provider_grant is not None and not provider_grant.allowed:
             if self._provider_mode == ProviderMode.ENFORCE:
+                self.audit.record(
+                    agent_name=self.agent_name,
+                    decision="DENY",
+                    message=f"{tool_name}.{operation or '*'} denied by provider",
+                    tool_name=tool_name,
+                    operation=operation,
+                    access_mode=access_mode.value,
+                    reason_code=ViolationReason.PROVIDER_DENIED.value,
+                    correlation_id=correlation_id,
+                    metadata={
+                        "call_digest": frozen.call_digest,
+                        "provider": provider_grant.provider,
+                    },
+                )
                 raise ProviderAuthorizationDenied(
                     f"Provider denied the action: {provider_grant.reason}",
                     agent_name=self.agent_name,
@@ -766,7 +830,14 @@ class Boundary:
             )
 
     def _check_global_blocked_operations(self, ctx: CallContext) -> None:
-        if ctx.operation is not None and ctx.operation in self.blocked_operations:
+        if ctx.operation is not None and not isinstance(ctx.operation, str):
+            raise BoundaryViolation(
+                "Operation must be a string.",
+                agent_name=ctx.agent_name,
+                tool_name=ctx.tool_name,
+                rule=ViolationReason.OPERATION_BLOCKED.value,
+            )
+        if operation_is_blocked(ctx.operation, self.blocked_operations):
             raise BoundaryViolation(
                 f"Operation {ctx.operation!r} is globally blocked for this agent.",
                 agent_name=ctx.agent_name,

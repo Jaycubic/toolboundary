@@ -11,9 +11,24 @@ even if the general access_mode would otherwise allow them.
 
 from __future__ import annotations
 
+import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from .enums import AccessMode
+
+
+def normalize_operation(operation: str) -> str:
+    """Canonical form used only when matching against a block-list."""
+    return unicodedata.normalize("NFKC", operation).strip().casefold()
+
+
+def operation_is_blocked(operation: str | None, blocked: Iterable[str]) -> bool:
+    """True if ``operation`` matches ``blocked`` regardless of case, spacing or width."""
+    if operation is None:
+        return False
+    normalized = normalize_operation(operation)
+    return any(normalized == normalize_operation(entry) for entry in blocked)
 
 
 @dataclass(frozen=True)
@@ -66,7 +81,7 @@ class ToolPermission:
     requires_approval: bool = False
 
     def operation_allowed(self, operation: str | None) -> bool:
-        if operation is not None and operation in self.blocked_operations:
+        if operation_is_blocked(operation, self.blocked_operations):
             return False
         if self.allowed_operations is not None:
             return operation is not None and operation in self.allowed_operations

@@ -33,9 +33,11 @@ integrations from drifting apart.
 
 from __future__ import annotations
 
+import inspect
 import time
 from typing import Any, Optional, Type  # noqa: UP035
 
+from .._arguments import normalize_call_arguments
 from ..boundary import Boundary
 from ..enums import AccessMode
 from ..exceptions import ApprovalRequired, BoundaryViolation
@@ -47,6 +49,23 @@ except ImportError as exc:  # pragma: no cover
         "toolboundary.integrations.langchain requires the 'langchain-core' package. "
         "Install it with: pip install toolboundary[langchain]"
     ) from exc
+
+
+_INJECTED_PARAMETERS = frozenset({"run_manager", "callbacks", "config"})
+
+
+def _call_target(tool: BaseTool, *, is_async: bool) -> Any:
+    """The callable whose parameters describe the tool's real arguments."""
+    func = getattr(tool, "coroutine", None) if is_async else None
+    return func or getattr(tool, "func", None) or tool._run  # noqa: SLF001
+
+
+def _with_required_config(method: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Supply LangChain's keyword-only ``config`` to tools that require it."""
+    parameter = inspect.signature(method).parameters.get("config")
+    if parameter is None or parameter.default is not inspect.Parameter.empty or "config" in kwargs:
+        return kwargs
+    return {**kwargs, "config": {}}
 
 
 def guard_tool(
@@ -88,30 +107,34 @@ def guard_tool(
         args_schema: Optional[Type[Any]] = getattr(tool, "args_schema", None)  # noqa: UP006, UP045
         return_direct: bool = getattr(tool, "return_direct", False)
 
-        def _evaluate(self, kwargs: dict[str, Any]) -> None:
+        def _arguments(
+            self, args: tuple[Any, ...], kwargs: dict[str, Any], *, is_async: bool
+        ) -> dict[str, Any]:
+            """Name positional arguments so limits and evidence cover them."""
+            target = _call_target(tool, is_async=is_async)
+            arguments = normalize_call_arguments(target, args, kwargs)
+            return {k: v for k, v in arguments.items() if k not in _INJECTED_PARAMETERS}
+
+        def _evaluate(self, arguments: dict[str, Any]) -> None:
             """Simple check path (no provider)."""
-            resolved_value = kwargs.get(value_arg) if value_arg else None
-            resolved_records = kwargs.get(record_count_arg) if record_count_arg else None
             boundary.check(
                 resolved_name,
                 operation=operation,
                 access_mode=access_mode,
-                value=resolved_value,
-                record_count=resolved_records,
+                value=arguments.get(value_arg) if value_arg else None,
+                record_count=arguments.get(record_count_arg) if record_count_arg else None,
                 metadata={"langchain_tool": tool.name},
             )
 
-        def _authorize(self, kwargs: dict[str, Any]) -> Any:
+        def _authorize(self, arguments: dict[str, Any]) -> Any:
             """Provider-aware authorization path."""
-            resolved_value = kwargs.get(value_arg) if value_arg else None
-            resolved_records = kwargs.get(record_count_arg) if record_count_arg else None
             return boundary.authorize_call(
                 tool_name=resolved_name,
                 operation=operation,
                 access_mode=access_mode,
-                arguments=dict(kwargs),
-                value=resolved_value,
-                record_count=resolved_records,
+                arguments=arguments,
+                value=arguments.get(value_arg) if value_arg else None,
+                record_count=arguments.get(record_count_arg) if record_count_arg else None,
                 metadata={"langchain_tool": tool.name},
                 resource=resource,
                 tool_version=tool_version,
@@ -119,63 +142,65 @@ def guard_tool(
                 manifest_hash=manifest_hash,
             )
 
+        def _dispatch(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+            return tool._run(*args, **_with_required_config(tool._run, kwargs))  # noqa: SLF001
+
+        async def _adispatch(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+            arun = getattr(tool, "_arun", None)
+            if arun is None:
+                # Fall back to sync _run if the wrapped tool has no async implementation
+                return self._dispatch(args, kwargs)
+            return await arun(*args, **_with_required_config(arun, kwargs))
+
         def _run(self, *args: Any, **kwargs: Any) -> Any:
-            if boundary._provider is not None:  # noqa: SLF001
-                authorization = self._authorize(kwargs)
-                started_at = time.time()
-                error: BaseException | None = None
-                result: Any = None
-                try:
-                    result = tool._run(*args, **kwargs)  # noqa: SLF001
-                except BaseException as exc:
-                    error = exc
-                    raise
-                finally:
-                    finished_at = time.time()
-                    boundary.record_execution(
-                        authorization,
-                        result=result,
-                        error=error,
-                        started_at=started_at,
-                        finished_at=finished_at,
-                    )
-                return result
-            else:
-                self._evaluate(kwargs)
-                return tool._run(*args, **kwargs)  # noqa: SLF001
+            arguments = self._arguments(args, kwargs, is_async=False)
+            if boundary._provider is None:  # noqa: SLF001
+                self._evaluate(arguments)
+                return self._dispatch(args, kwargs)
+
+            authorization = self._authorize(arguments)
+            started_at = time.time()
+            error: BaseException | None = None
+            result: Any = None
+            try:
+                result = self._dispatch(args, kwargs)
+            except BaseException as exc:
+                error = exc
+                raise
+            finally:
+                boundary.record_execution(
+                    authorization,
+                    result=result,
+                    error=error,
+                    started_at=started_at,
+                    finished_at=time.time(),
+                )
+            return result
 
         async def _arun(self, *args: Any, **kwargs: Any) -> Any:
-            if boundary._provider is not None:  # noqa: SLF001
-                authorization = self._authorize(kwargs)
-                started_at = time.time()
-                error: BaseException | None = None
-                result: Any = None
-                try:
-                    arun = getattr(tool, "_arun", None)
-                    if arun is not None:
-                        result = await arun(*args, **kwargs)
-                    else:
-                        result = tool._run(*args, **kwargs)  # noqa: SLF001
-                except BaseException as exc:
-                    error = exc
-                    raise
-                finally:
-                    finished_at = time.time()
-                    boundary.record_execution(
-                        authorization,
-                        result=result,
-                        error=error,
-                        started_at=started_at,
-                        finished_at=finished_at,
-                    )
-                return result
-            else:
-                self._evaluate(kwargs)
-                arun = getattr(tool, "_arun", None)
-                if arun is not None:
-                    return await arun(*args, **kwargs)
-                # Fall back to sync _run if the wrapped tool has no async implementation
-                return tool._run(*args, **kwargs)  # noqa: SLF001
+            arguments = self._arguments(args, kwargs, is_async=True)
+            if boundary._provider is None:  # noqa: SLF001
+                self._evaluate(arguments)
+                return await self._adispatch(args, kwargs)
+
+            authorization = self._authorize(arguments)
+            started_at = time.time()
+            error: BaseException | None = None
+            result: Any = None
+            try:
+                result = await self._adispatch(args, kwargs)
+            except BaseException as exc:
+                error = exc
+                raise
+            finally:
+                boundary.record_execution(
+                    authorization,
+                    result=result,
+                    error=error,
+                    started_at=started_at,
+                    finished_at=time.time(),
+                )
+            return result
 
     return _GuardedTool()
 

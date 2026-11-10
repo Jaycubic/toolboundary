@@ -25,6 +25,7 @@ import inspect
 import time
 from typing import Any, Callable, TypeVar
 
+from ._arguments import normalize_call_arguments
 from ._redact import redact_args
 from .boundary import Boundary
 from .enums import AccessMode
@@ -91,14 +92,10 @@ def guarded_tool(
 
     def decorator(func: F) -> F:
         resolved_tool_name = tool_name or func.__name__
-        sig = inspect.signature(func)
 
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            bound = sig.bind_partial(*args, **kwargs)
-            bound.apply_defaults()
-            call_kwargs = bound.arguments
-
+        def authorize(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Any, str | None]:
+            """Evaluate the call; returns (authorization or None, correlation id)."""
+            call_kwargs = normalize_call_arguments(func, args, kwargs)
             resolved_operation = call_kwargs.get("operation") or operation
             resolved_value = call_kwargs.get(value_arg) if value_arg else None
             resolved_record_count = (
@@ -107,52 +104,17 @@ def guarded_tool(
             resolved_correlation_id = (
                 call_kwargs.get(correlation_id_arg) if correlation_id_arg else None
             )
+            metadata = {
+                "args": redact_args(
+                    call_kwargs,
+                    extra_names=sensitive_args,
+                    log_values=log_arg_values,
+                )
+            }
 
             # Use the full authorize_call path when a provider is configured,
             # otherwise fall back to the simple check() for backward compat.
-            if boundary._provider is not None:  # noqa: SLF001
-                authorization = boundary.authorize_call(
-                    tool_name=resolved_tool_name,
-                    operation=resolved_operation,
-                    access_mode=access_mode,
-                    arguments=dict(call_kwargs),
-                    value=resolved_value,
-                    record_count=resolved_record_count,
-                    correlation_id=resolved_correlation_id,
-                    metadata={
-                        "args": redact_args(
-                            call_kwargs,
-                            extra_names=sensitive_args,
-                            log_values=log_arg_values,
-                        )
-                    },
-                    resource=resource,
-                    tool_version=tool_version,
-                    schema_hash=schema_hash,
-                    manifest_hash=manifest_hash,
-                )
-
-                started_at = time.time()
-                error: BaseException | None = None
-                result: Any = None
-                try:
-                    result = func(*args, **kwargs)
-                except BaseException as exc:
-                    error = exc
-                    raise
-                finally:
-                    finished_at = time.time()
-                    boundary.record_execution(
-                        authorization,
-                        result=result,
-                        error=error,
-                        started_at=started_at,
-                        finished_at=finished_at,
-                        correlation_id=resolved_correlation_id,
-                    )
-                return result
-            else:
-                # No provider: use the simple check() path.
+            if boundary._provider is None:  # noqa: SLF001
                 boundary.check(
                     resolved_tool_name,
                     operation=resolved_operation,
@@ -160,20 +122,83 @@ def guarded_tool(
                     value=resolved_value,
                     record_count=resolved_record_count,
                     correlation_id=resolved_correlation_id,
-                    metadata={
-                        "args": redact_args(
-                            call_kwargs,
-                            extra_names=sensitive_args,
-                            log_values=log_arg_values,
-                        )
-                    },
+                    metadata=metadata,
                 )
+                return None, resolved_correlation_id
 
+            authorization = boundary.authorize_call(
+                tool_name=resolved_tool_name,
+                operation=resolved_operation,
+                access_mode=access_mode,
+                arguments=dict(call_kwargs),
+                value=resolved_value,
+                record_count=resolved_record_count,
+                correlation_id=resolved_correlation_id,
+                metadata=metadata,
+                resource=resource,
+                tool_version=tool_version,
+                schema_hash=schema_hash,
+                manifest_hash=manifest_hash,
+                sensitive_args=sensitive_args,
+            )
+            return authorization, resolved_correlation_id
+
+        def record(
+            authorization: Any,
+            result: Any,
+            error: BaseException | None,
+            started_at: float,
+            correlation_id: str | None,
+        ) -> None:
+            boundary.record_execution(
+                authorization,
+                result=result,
+                error=error,
+                started_at=started_at,
+                finished_at=time.time(),
+                correlation_id=correlation_id,
+            )
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            authorization, correlation_id = authorize(args, kwargs)
+            if authorization is None:
                 return func(*args, **kwargs)
 
-        wrapper.__toolboundary_boundary__ = boundary  # type: ignore[attr-defined]
-        wrapper.__toolboundary_tool_name__ = resolved_tool_name  # type: ignore[attr-defined]
-        return wrapper  # type: ignore[return-value]
+            started_at = time.time()
+            error: BaseException | None = None
+            result: Any = None
+            try:
+                result = func(*args, **kwargs)
+            except BaseException as exc:
+                error = exc
+                raise
+            finally:
+                record(authorization, result, error, started_at, correlation_id)
+            return result
+
+        @functools.wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            authorization, correlation_id = authorize(args, kwargs)
+            if authorization is None:
+                return await func(*args, **kwargs)
+
+            started_at = time.time()
+            error: BaseException | None = None
+            result: Any = None
+            try:
+                result = await func(*args, **kwargs)
+            except BaseException as exc:
+                error = exc
+                raise
+            finally:
+                record(authorization, result, error, started_at, correlation_id)
+            return result
+
+        guarded: Any = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
+        guarded.__toolboundary_boundary__ = boundary
+        guarded.__toolboundary_tool_name__ = resolved_tool_name
+        return guarded  # type: ignore[no-any-return]
 
     return decorator
 

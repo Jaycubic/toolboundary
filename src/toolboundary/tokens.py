@@ -15,9 +15,15 @@ into a physical artifact: a signed, time-boxed, single-use credential
 tied to the *exact* agent/tool/operation/nonce combination that was
 approved. The optional network enforcement layer (`toolboundary.network`)
 then requires a valid token in every proxied request and refuses to
-forward anything else -- so even a compromised or rewritten agent cannot
-reach the real tool endpoint without first passing through
-`Boundary.check()` to obtain a fresh token.
+forward anything else -- so an agent without the signing secret cannot
+reach the real tool endpoint through the proxy without first passing
+through `Boundary.check()` to obtain a fresh token.
+
+Trust model: HMAC is symmetric, so any process holding the secret can mint
+tokens. Code running inside an agent process that also holds the issuer can
+therefore create a token without calling `Boundary.check()`. To defend
+against a compromised agent, run the Boundary, issuer and enforcement proxy
+in a separate process and never give the agent the secret.
 
 This module has zero third-party dependencies (uses stdlib `hmac`,
 `hashlib`, `secrets`) so it imposes no cost on users who never enable
@@ -31,9 +37,14 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
+
+from .enums import AccessMode
+
+_OPTIONAL_CLAIMS = ("access_mode", "method", "path", "body_sha256")
 
 
 class TokenError(Exception):
@@ -71,10 +82,14 @@ class AuthorizationToken:
     issued_at: float
     expires_at: float
     signature: str
+    access_mode: str | None = None
+    method: str | None = None
+    path: str | None = None
+    body_sha256: str | None = None
 
-    def to_wire(self) -> str:
-        """Serialize to a compact string suitable for an HTTP header."""
-        payload = {
+    def claims(self) -> dict[str, Any]:
+        """The signed fields. Optional claims are present only when set."""
+        payload: dict[str, Any] = {
             "token_id": self.token_id,
             "agent_name": self.agent_name,
             "tool_name": self.tool_name,
@@ -82,7 +97,15 @@ class AuthorizationToken:
             "issued_at": self.issued_at,
             "expires_at": self.expires_at,
         }
-        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        for name in _OPTIONAL_CLAIMS:
+            claim = getattr(self, name)
+            if claim is not None:
+                payload[name] = claim
+        return payload
+
+    def to_wire(self) -> str:
+        """Serialize to a compact string suitable for an HTTP header."""
+        raw = json.dumps(self.claims(), sort_keys=True, separators=(",", ":")).encode("utf-8")
         encoded = base64.urlsafe_b64encode(raw).decode("ascii")
         return f"{encoded}.{self.signature}"
 
@@ -92,17 +115,29 @@ class AuthorizationToken:
             encoded, signature = wire.rsplit(".", 1)
             raw = base64.urlsafe_b64decode(encoded.encode("ascii"))
             payload = json.loads(raw)
+            token = AuthorizationToken(
+                token_id=payload["token_id"],
+                agent_name=payload["agent_name"],
+                tool_name=payload["tool_name"],
+                operation=payload.get("operation"),
+                issued_at=payload["issued_at"],
+                expires_at=payload["expires_at"],
+                signature=signature,
+                **{name: payload.get(name) for name in _OPTIONAL_CLAIMS},
+            )
         except Exception as exc:  # noqa: BLE001
             raise TokenInvalid(f"Malformed token: {exc}") from exc
-        return AuthorizationToken(
-            token_id=payload["token_id"],
-            agent_name=payload["agent_name"],
-            tool_name=payload["tool_name"],
-            operation=payload.get("operation"),
-            issued_at=payload["issued_at"],
-            expires_at=payload["expires_at"],
-            signature=signature,
-        )
+
+        required_text = (token.token_id, token.agent_name, token.tool_name)
+        optional_text = (token.operation, *(getattr(token, n) for n in _OPTIONAL_CLAIMS))
+        timestamps = (token.issued_at, token.expires_at)
+        if (
+            not all(isinstance(item, str) for item in required_text)
+            or not all(item is None or isinstance(item, str) for item in optional_text)
+            or any(isinstance(t, bool) or not isinstance(t, (int, float)) for t in timestamps)
+        ):
+            raise TokenInvalid("Malformed token: a claim has the wrong type.")
+        return token
 
 
 class TokenIssuer:
@@ -127,27 +162,35 @@ class TokenIssuer:
         agent_name: str,
         tool_name: str,
         operation: str | None = None,
+        access_mode: AccessMode | str | None = None,
+        request_method: str | None = None,
+        request_path: str | None = None,
+        request_body: bytes | None = None,
     ) -> AuthorizationToken:
+        """Issue a token, optionally bound to one exact HTTP request.
+
+        ``access_mode`` limits which HTTP methods the proxy accepts. The
+        ``request_*`` values, when given, must match the proxied request:
+        ``request_path`` is the path after ``/<tool_name>/``, including any
+        query string.
+        """
         now = time.time()
-        token_id = secrets.token_urlsafe(16)
-        payload = {
-            "token_id": token_id,
-            "agent_name": agent_name,
-            "tool_name": tool_name,
-            "operation": operation,
-            "issued_at": now,
-            "expires_at": now + self.ttl_seconds,
-        }
-        signature = self._sign(payload)
-        return AuthorizationToken(
-            token_id=token_id,
+        unsigned = AuthorizationToken(
+            token_id=secrets.token_urlsafe(16),
             agent_name=agent_name,
             tool_name=tool_name,
             operation=operation,
             issued_at=now,
             expires_at=now + self.ttl_seconds,
-            signature=signature,
+            signature="",
+            access_mode=access_mode.value if isinstance(access_mode, AccessMode) else access_mode,
+            method=request_method.upper() if request_method is not None else None,
+            path=request_path.lstrip("/") if request_path is not None else None,
+            body_sha256=hashlib.sha256(request_body).hexdigest()
+            if request_body is not None
+            else None,
         )
+        return replace(unsigned, signature=self._sign(unsigned.claims()))
 
     def verify(
         self,
@@ -158,16 +201,11 @@ class TokenIssuer:
         expected_operation: str | None = None,
     ) -> None:
         """Raises TokenInvalid / TokenExpired if the token does not check out."""
-        payload = {
-            "token_id": token.token_id,
-            "agent_name": token.agent_name,
-            "tool_name": token.tool_name,
-            "operation": token.operation,
-            "issued_at": token.issued_at,
-            "expires_at": token.expires_at,
-        }
-        expected_sig = self._sign(payload)
-        if not hmac.compare_digest(expected_sig, token.signature):
+        expected_sig = self._sign(token.claims())
+        # Compare bytes: compare_digest raises TypeError on non-ASCII str input.
+        if not hmac.compare_digest(
+            expected_sig.encode("ascii"), str(token.signature).encode("utf-8", "replace")
+        ):
             raise TokenInvalid("Token signature does not match; token may be forged or corrupted.")
 
         if time.time() > token.expires_at:
@@ -203,20 +241,23 @@ class InMemoryTokenStore:
 
     def __init__(self) -> None:
         self._used: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     def mark_used(self, token_id: str, expires_at: float) -> bool:
         """Returns True if this is the first use, False if already used."""
-        self._gc()
-        if token_id in self._used:
-            return False
-        self._used[token_id] = expires_at
-        return True
+        with self._lock:
+            self._gc()
+            if token_id in self._used:
+                return False
+            self._used[token_id] = expires_at
+            return True
 
     def is_used(self, token_id: str) -> bool:
-        return token_id in self._used
+        with self._lock:
+            return token_id in self._used
 
     def _gc(self) -> None:
-        """Drop expired entries so memory doesn't grow unbounded."""
+        """Drop expired entries so memory doesn't grow unbounded. Caller holds the lock."""
         now = time.time()
         expired = [tid for tid, exp in self._used.items() if exp < now]
         for tid in expired:

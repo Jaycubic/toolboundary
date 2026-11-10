@@ -25,9 +25,9 @@ from toolboundary.integrations.agentkey import AgentKeyProvider
 
 # In production, pass an authenticated AgentKey client:
 #   provider = AgentKeyProvider(client=agentkey_client)
-# Without arguments, AgentKeyProvider runs in standalone simulated mode
-# for local demos and development without external network credentials.
-provider = AgentKeyProvider()
+# simulate=True explicitly enables a demo mode that allows every call and
+# records no real evidence. Never use it in production.
+provider = AgentKeyProvider(simulate=True)
 
 boundary = Boundary(
     agent_name="agentkey-demo",

@@ -33,7 +33,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-langchain = ["langchain-core>=0.1.0"]
+langchain = ["langchain-core>=0.3.81,!=1.0.*,!=1.1.*,!=1.2.0,!=1.2.1,!=1.2.2,!=1.2.3,!=1.2.4"]
 crewai = ["crewai>=1.15.22"]
 # The optional network enforcement layer (toolboundary.network, toolboundary.tokens)
 # is stdlib-only and needs no extra dependency -- listed here only so
@@ -49,7 +49,7 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "mypy>=1.8",
-    "langchain-core>=0.1.0",
+    "langchain-core>=0.3.81,!=1.0.*,!=1.1.*,!=1.2.0,!=1.2.1,!=1.2.2,!=1.2.3,!=1.2.4",
     "redis>=5.0",
     "fakeredis[lua]>=2.21",
 ]

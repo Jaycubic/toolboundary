@@ -200,7 +200,7 @@ class TestNetworkEnforcement:
         enf.start(host="127.0.0.1", port=0)
         port = enf._server.server_address[1]  # noqa: SLF001
         try:
-            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api", access_mode="WRITE")
             req = urllib.request.Request(
                 _proxy_url(port, "crm_api/customers"),
                 data=b"12345",
@@ -222,7 +222,7 @@ class TestNetworkEnforcement:
         enf.start(host="127.0.0.1", port=0)
         port = enf._server.server_address[1]  # noqa: SLF001
         try:
-            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api", access_mode="WRITE")
             with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
                 client.sendall(
                     (
@@ -247,7 +247,7 @@ class TestNetworkEnforcement:
         enf.start(host="127.0.0.1", port=0)
         port = enf._server.server_address[1]  # noqa: SLF001
         try:
-            token = issuer.issue(agent_name="agent-1", tool_name="crm_api")
+            token = issuer.issue(agent_name="agent-1", tool_name="crm_api", access_mode="WRITE")
             with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
                 client.sendall(
                     (
