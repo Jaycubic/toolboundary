@@ -1,6 +1,6 @@
 # Contributing to ToolBoundary
 
-The latest published release is [v1.0.5](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.5). The current codebase includes the core policy engine, provider/evidence layer, network enforcement, optional Redis backends, and optional LangChain and CrewAI adapters. Please check the existing implementation and tests before proposing overlapping functionality.
+The latest published release is [v1.1.0](https://github.com/Jaycubic/toolboundary/releases/tag/v1.1.0). The current codebase includes the core policy engine, provider/evidence layer, network enforcement, the policy gateway, optional Redis backends, and optional LangChain and CrewAI adapters. Please check the existing implementation and tests before proposing overlapping functionality.
 
 Thanks for considering a contribution. ToolBoundary is intentionally small in
 scope — please read the "Known Limitations" section of the README before

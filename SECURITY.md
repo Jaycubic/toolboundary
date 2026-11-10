@@ -10,8 +10,8 @@ enforcement, or disable the kill switch.
 
 | Version | Security support |
 |---------|------------------|
-| 1.0.5   | Supported — latest release |
-| Earlier 1.0.x releases | Upgrade to 1.0.5; fixes are not backported by default |
+| 1.1.0   | Supported — latest release |
+| Earlier 1.x releases | Upgrade to 1.1.0; fixes are not backported by default |
 | < 1.0   | Not supported |
 
 Please reproduce issues against the latest release where possible. If an older

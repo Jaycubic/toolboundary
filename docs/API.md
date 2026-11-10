@@ -1,6 +1,6 @@
 # API Reference
 
-This reference documents the public API in the published ToolBoundary v1.0.5 release.
+This reference documents the public API in the published ToolBoundary v1.1.0 release.
 
 ## `toolboundary.Boundary`
 

@@ -12,7 +12,7 @@ ToolBoundary enforces tool permissions, operation allow-lists, rate limits, appr
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
 HTTP proxying for AI agents and LLM applications.
 
-**Latest release: [v1.0.5](https://github.com/Jaycubic/toolboundary/releases/tag/v1.0.5)** ·
+**Latest release: [v1.1.0](https://github.com/Jaycubic/toolboundary/releases/tag/v1.1.0)** ·
 [Install from PyPI](https://pypi.org/project/toolboundary/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
@@ -24,6 +24,26 @@ with the rest of your code.
 ```bash
 pip install toolboundary
 ```
+
+## What's new in v1.1.0
+
+ToolBoundary v1.1.0 adds a policy gateway for protecting your tools from a compromised agent.
+
+- **Policy outside the agent** — `toolboundary.gateway` runs in its own process. The agent
+  holds only an identity key, so it can't approve its own requests.
+- **Deny by default** — a request must match a `GatewayRule` you wrote.
+- **Limits from the real request** — value and record count are read from the bytes being
+  forwarded, not from what the agent claims.
+- **Credentials stay out of the agent** — the gateway adds them when it forwards a request.
+
+The gateway only protects you when it's deployed separately from the agent. See the
+[gateway guide](docs/GATEWAY.md) for the requirements.
+
+### Upgrade notes
+
+- Guarding a tool without `access_mode` now raises `FutureWarning`. It still falls back to
+  `READ_ONLY`, and `access_mode` will be required in ToolBoundary 2.0.
+- `strict_limits=True` now also requires a value when a tool has only a `min_value`.
 
 ## What's new in v1.0.5
 
@@ -414,7 +434,7 @@ the ALLOW/DENY decision has already been enforced locally before the sink is inv
 
 ## Protecting against a compromised agent
 
-Available from v1.1.0. `toolboundary.gateway` runs policy outside the agent's process. The agent
+`toolboundary.gateway` runs policy outside the agent's process. The agent
 holds only a key, every request must match a rule you wrote, limits are read from the real
 request, and tool credentials stay in the gateway. It needs the right deployment to be effective:
 see the [gateway guide](docs/GATEWAY.md).
