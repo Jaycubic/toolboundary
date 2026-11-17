@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field, replace
@@ -72,6 +73,12 @@ or calling out to an external policy engine / GuardianIQ-style registry).
 """
 
 
+# A numeric string must be a plain ASCII decimal, such as "25" or "-25.50". Python's
+# float() also accepts whitespace, underscores, exponents and non-ASCII digits, which a
+# tool's own parser may read as a different number, so those are refused.
+_PLAIN_DECIMAL = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", re.ASCII)
+
+
 def _as_finite_number(value: object) -> float | None:
     if isinstance(value, bool):
         return None
@@ -81,9 +88,11 @@ def _as_finite_number(value: object) -> float | None:
         except (OverflowError, ValueError):
             return None
     elif isinstance(value, str):
+        if _PLAIN_DECIMAL.fullmatch(value) is None:
+            return None
         try:
-            number = float(value.strip())
-        except ValueError:
+            number = float(value)
+        except (OverflowError, ValueError):
             return None
     else:
         return None
@@ -909,10 +918,15 @@ class Boundary:
                 operation=ctx.operation,
                 rule=ViolationReason.INVALID_VALUE.value,
             )
-        if permission.min_value is not None and value < permission.min_value:
+        # A max_value without a min_value implies a floor of 0, so a negative amount
+        # (often a refund or credit) can't pass a ceiling meant for a positive one.
+        # Set min_value to a negative number to allow negative values.
+        min_value = permission.min_value
+        if min_value is None and permission.max_value is not None:
+            min_value = 0
+        if min_value is not None and value < min_value:
             raise BoundaryViolation(
-                f"Value {value} is below min_value {permission.min_value} "
-                f"for tool {ctx.tool_name!r}.",
+                f"Value {value} is below min_value {min_value} for tool {ctx.tool_name!r}.",
                 agent_name=ctx.agent_name,
                 tool_name=ctx.tool_name,
                 operation=ctx.operation,

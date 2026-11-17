@@ -167,6 +167,63 @@ class TestValueAndRecordLimits:
             boundary.check("refund", value=-1)
         assert exc_info.value.rule == "MIN_VALUE_VIOLATED"
 
+    @pytest.mark.parametrize("value", [-1, -5000, "-0.01", Decimal("-1")])
+    def test_max_value_alone_implies_a_floor_of_zero(self, value):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", value=value)
+        assert exc_info.value.rule == "MIN_VALUE_VIOLATED"
+
+    def test_zero_passes_an_implied_floor(self):
+        make_boundary().check("wire_transfer", value=0)
+
+    def test_explicit_negative_min_value_allows_negatives(self):
+        boundary = Boundary(
+            agent_name="agent",
+            autonomy=AutonomyLevel.AUTONOMOUS,
+            permissions=[
+                ToolPermission(
+                    "adjust_balance",
+                    access_mode=AccessMode.EXECUTE,
+                    min_value=-100,
+                    max_value=100,
+                )
+            ],
+        )
+        boundary.check("adjust_balance", value=-50)
+
+    @pytest.mark.parametrize("value", ["25", "0", "99.99", "-0.5"])
+    def test_plain_decimal_strings_are_read_as_numbers(self, value):
+        boundary = Boundary(
+            agent_name="agent",
+            autonomy=AutonomyLevel.AUTONOMOUS,
+            permissions=[
+                ToolPermission("t", access_mode=AccessMode.EXECUTE, min_value=-1, max_value=100)
+            ],
+        )
+        boundary.check("t", value=value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            " 25",
+            "25 ",
+            "1_0",
+            "١٢",  # Arabic-Indic digits
+            "1e1",
+            "+25",
+            "025",
+            ".5",
+            "25.",
+            "0x10",
+            "inf",
+            "",
+        ],
+    )
+    def test_ambiguous_numeric_strings_are_denied(self, value):
+        with pytest.raises(BoundaryViolation) as exc_info:
+            make_boundary().check("wire_transfer", value=value)
+        assert exc_info.value.rule == "INVALID_VALUE"
+
     @pytest.mark.parametrize(
         ("value", "reason"),
         [

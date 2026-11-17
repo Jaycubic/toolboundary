@@ -12,7 +12,7 @@ ToolBoundary enforces tool permissions, operation allow-lists, rate limits, appr
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
 HTTP proxying for AI agents and LLM applications.
 
-**Latest release: [v1.1.0](https://github.com/Jaycubic/toolboundary/releases/tag/v1.1.0)** ·
+**Latest release: [v1.1.1](https://github.com/Jaycubic/toolboundary/releases/tag/v1.1.1)** ·
 [Install from PyPI](https://pypi.org/project/toolboundary/)
 
 ToolBoundary answers one question, fast and locally, every time your agent tries to call a
@@ -24,6 +24,102 @@ with the rest of your code.
 ```bash
 pip install toolboundary
 ```
+
+## Overview
+
+**The problem.** A tool-calling agent decides at runtime which tools to call and with what
+arguments. A hallucination, a misread instruction or a prompt injection in a document or web
+page can turn into a real action: a payment, a deleted record, a bulk email. Most of these
+can't be undone, and the model's own judgement is the only thing standing in the way.
+
+**What ToolBoundary does.** It puts a deterministic policy between the agent's decision and
+the tool's execution. Each call is checked against rules you wrote, before the tool runs.
+The check doesn't use an LLM, so the same call always gets the same answer and a prompt
+can't talk its way past it.
+
+## Safety approach
+
+ToolBoundary stops unauthorized and irreversible actions in layers. Each layer works without
+the others.
+
+| Risk | Control |
+|---|---|
+| Agent calls a tool it should never touch | Only tools with a `ToolPermission` are allowed. Everything else is denied. |
+| Agent does more than the tool is meant for | Access modes (`READ_ONLY`, `WRITE`, `EXECUTE`, `ADMIN`), operation allow-lists, and block-lists that always win. |
+| Irreversible or high-impact action | `requires_approval=True` routes the call to a human before it runs. `AutonomyLevel.RECOMMEND_ONLY` and `HUMAN_APPROVAL_REQUIRED` stop an agent acting alone at all. |
+| Action is allowed but too large | `max_value`, `min_value` and `max_records` ceilings, for example a payment limit or a cap on rows deleted. |
+| Agent loops or runs away | Global and per-tool rate limits. |
+| Something is going wrong right now | A kill switch file stops every call immediately, with no restart. |
+| Approved call is swapped or replayed | With a provider, the exact call is frozen and hashed before approval, and an approval can be used only once. |
+| Agent process itself is compromised | The [policy gateway](docs/GATEWAY.md) runs policy in a separate process, reads limits from the real request bytes, and keeps tool credentials out of the agent. |
+
+**Fail closed.** A misconfiguration, an unreadable value, an error in a policy hook or an
+unreachable provider in enforce mode all deny the call. An external provider can add a
+stricter check but can never turn a local deny into an allow.
+
+**Every decision is recorded.** Allows, denials and approval requests all go to a structured
+audit trail, with secret-looking arguments redacted.
+
+## Supporting evidence
+
+- **Tests.** About 300 tests cover the policy engine, the decorator and framework adapters,
+  the network proxy, tokens, providers, the Redis backends and the policy gateway. They run
+  in [CI](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml) on Python
+  3.9 to 3.12, with coverage reported to
+  [Codecov](https://codecov.io/gh/Jaycubic/toolboundary).
+- **Attack-focused tests.** [`tests/test_security_v105.py`](tests/test_security_v105.py) and
+  [`tests/test_gateway.py`](tests/test_gateway.py) test known bypass attempts: forged and
+  replayed tokens, case and Unicode tricks against block-lists, path traversal, duplicate
+  JSON keys, `NaN` and `Infinity`, ambiguous number strings, negative amounts, and
+  smuggled request bodies.
+- **Runnable examples** in [`examples/`](examples):
+  - [`basic_usage.py`](examples/basic_usage.py): allowed calls, blocked operations, value
+    limits, approval and the kill switch.
+  - [`policy_gateway.py`](examples/policy_gateway.py): an agent using the out-of-process
+    gateway.
+  - [`network_enforcement.py`](examples/network_enforcement.py): token-gated HTTP proxying.
+  - [`agentkey_integration.py`](examples/agentkey_integration.py): an external
+    authorization provider.
+  - [`benchmark.py`](examples/benchmark.py): the overhead of a policy check.
+- **Documentation**: the [API reference](docs/API.md), the [gateway guide](docs/GATEWAY.md),
+  the [security policy](SECURITY.md) and the [changelog](CHANGELOG.md).
+
+```bash
+pip install -e '.[dev]'
+pytest
+python examples/basic_usage.py
+```
+
+## Limitations
+
+ToolBoundary can only check calls that go through it, and it can't judge whether an allowed
+action is a good idea. The main limits:
+
+- In-process checks stop mistakes and bad model output, not a compromised agent process.
+  Use the gateway for that, deployed as a separate user or container.
+- It doesn't replace scoped credentials or an egress firewall.
+- A prompt-injected agent can still do anything its policy allows, so keep policies narrow.
+- The gateway covers HTTP tools only, and doesn't inspect responses.
+
+The full list is in [Known limitations](#known-limitations--please-read-this).
+
+## What's new in v1.1.1
+
+A hardening release. Every user should upgrade.
+
+- **Stricter number strings.** A value or record count given as a string must be a plain
+  ASCII decimal such as `"25"` or `"-25.50"`. Strings with spaces, underscores, exponents,
+  a leading `+` or zero, or non-ASCII digits are denied, because a tool's parser might
+  read them as a different number.
+- **No negative values under a ceiling.** A `max_value` without a `min_value` now implies a
+  floor of 0, so `-5000` can't pass a `max_value=100` payment limit. Set a negative
+  `min_value` to allow negative values.
+
+### Upgrade notes
+
+- If a tool legitimately takes negative values, set `min_value` explicitly.
+- If you pass numbers as strings with spaces or other formatting, convert them to numbers
+  or plain decimal strings before calling ToolBoundary.
 
 ## What's new in v1.1.0
 

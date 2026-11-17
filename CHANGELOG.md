@@ -2,6 +2,26 @@
 
 All notable changes to ToolBoundary are documented here.
 
+## [1.1.1] - 2026-11-17
+
+### Changed
+
+- A value or record count given as a string must now be a plain ASCII decimal, such as
+  `"25"` or `"-25.50"`. Strings with whitespace, underscores, exponents, a leading `+` or
+  zero, or non-ASCII digits are denied with `INVALID_VALUE`, because a tool's parser might
+  read them as a different number.
+- A `max_value` without a `min_value` now implies a floor of 0, so a negative value is
+  denied with `MIN_VALUE_VIOLATED`. Set a negative `min_value` to allow negative values.
+
+### Added
+
+- Add Overview, Safety approach, Supporting evidence and Limitations sections to the README.
+
+### Fixed
+
+- Give the gateway's ambiguous-body tests short ids, so the suite runs on Windows. One id
+  was longer than Windows allows in an environment variable.
+
 ## [1.1.0] - 2026-11-10
 
 ### Added

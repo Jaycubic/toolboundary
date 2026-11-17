@@ -1,6 +1,6 @@
 # API Reference
 
-This reference documents the public API in the published ToolBoundary v1.1.0 release.
+This reference documents the public API in the published ToolBoundary v1.1.1 release.
 
 ## `toolboundary.Boundary`
 
@@ -123,7 +123,10 @@ can still be called with `access_mode=READ_ONLY`).
 
 When `allowed_operations` is set, each call must specify an operation from
 that allow-list. `min_value` and `max_value` bound numeric values when a
-value is supplied. By default, omitted values do not trigger a ceiling;
+value is supplied. A `max_value` without a `min_value` implies a floor of 0;
+set a negative `min_value` to allow negative values. A value given as a string
+must be a plain ASCII decimal such as `"25"` or `"-25.50"`; anything else is
+denied with `INVALID_VALUE`. By default, omitted values do not trigger a ceiling;
 `Boundary(strict_limits=True)` requires values when the corresponding
 `max_value` or `max_records` limit is configured.
 

@@ -282,6 +282,19 @@ def test_value_is_read_from_the_body_being_forwarded(harness: Harness, amount: A
         b"\xff\xfe" + '{"payment":{"amount":1}}'.encode("utf-16-le"),
         b"[" * 200000,
     ],
+    # Short ids: pytest puts the test id in an environment variable, and Windows
+    # rejects values over 32,767 characters.
+    ids=[
+        "duplicate-object",
+        "duplicate-key",
+        "missing-field",
+        "nan",
+        "infinity",
+        "not-json",
+        "utf8-bom",
+        "utf16",
+        "deep-nesting",
+    ],
 )
 def test_ambiguous_or_unreadable_bodies_are_denied(harness: Harness, body: bytes) -> None:
     status, response, _ = harness.raw("POST", "/crm/payments", body, JSON_HEADERS)
