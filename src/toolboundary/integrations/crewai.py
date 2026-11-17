@@ -15,8 +15,7 @@ try:
     from crewai.tools import BaseTool
 except ImportError as exc:  # pragma: no cover - optional dependency
     raise ImportError(
-        "CrewAI integration requires CrewAI. "
-        "Install it with `pip install toolboundary[crewai]`."
+        "CrewAI integration requires CrewAI. Install it with `pip install toolboundary[crewai]`."
     ) from exc
 
 from toolboundary import AccessMode, Boundary
@@ -53,9 +52,7 @@ def guard_tool(
         max_usage_count: int | None = tool.max_usage_count
         tool_failure_policy: Any = tool.tool_failure_policy
 
-        def _arguments(
-            self, args: tuple[Any, ...], kwargs: dict[str, Any]
-        ) -> dict[str, Any]:
+        def _arguments(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
             """Normalize positional and keyword arguments for policy checks."""
             signature = inspect.signature(tool._run)
             bound = signature.bind(*args, **kwargs)
@@ -77,11 +74,7 @@ def guard_tool(
                 operation=operation,
                 access_mode=declared_access_mode,
                 value=arguments.get(value_arg) if value_arg else None,
-                record_count=(
-                    arguments.get(record_count_arg)
-                    if record_count_arg
-                    else None
-                ),
+                record_count=(arguments.get(record_count_arg) if record_count_arg else None),
                 metadata={"crewai_tool": tool.name},
             )
 
@@ -92,11 +85,7 @@ def guard_tool(
                 access_mode=declared_access_mode,
                 arguments=arguments,
                 value=arguments.get(value_arg) if value_arg else None,
-                record_count=(
-                    arguments.get(record_count_arg)
-                    if record_count_arg
-                    else None
-                ),
+                record_count=(arguments.get(record_count_arg) if record_count_arg else None),
                 metadata={"crewai_tool": tool.name},
                 resource=resource,
                 tool_version=tool_version,
@@ -178,9 +167,7 @@ def guard_tools(
         guard_tool(
             tool,
             boundary,
-            access_mode=overrides.get(tool.name, {}).get(
-                "access_mode", access_mode
-            ),
+            access_mode=overrides.get(tool.name, {}).get("access_mode", access_mode),
             **{
                 key: value
                 for key, value in overrides.get(tool.name, {}).items()

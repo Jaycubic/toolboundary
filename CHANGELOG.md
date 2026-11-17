@@ -10,12 +10,23 @@ All notable changes to ToolBoundary are documented here.
   `"25"` or `"-25.50"`. Strings with whitespace, underscores, exponents, a leading `+` or
   zero, or non-ASCII digits are denied with `INVALID_VALUE`, because a tool's parser might
   read them as a different number.
-- A `max_value` without a `min_value` now implies a floor of 0, so a negative value is
-  denied with `MIN_VALUE_VIOLATED`. Set a negative `min_value` to allow negative values.
+- A tool with a `max_value` but no `min_value` now raises a `FutureWarning`, because negative
+  values pass such a limit. Behaviour is unchanged until ToolBoundary 2.0, which will imply
+  a floor of 0.
 
 ### Added
 
+- Add `Boundary(deny_negative_values=True)`. A `max_value` without a `min_value` then gets a
+  floor of 0, and negative values are denied with `MIN_VALUE_VIOLATED`. An explicit
+  `min_value` always wins.
 - Add Overview, Safety approach, Supporting evidence and Limitations sections to the README.
+- Add CI checks for ruff formatting and mypy, and test on Python 3.13, Windows and macOS.
+- Add a Security workflow (CodeQL, `pip-audit`, ruff bandit rules, dependency review),
+  OpenSSF Scorecard and Dependabot.
+- Add performance benchmarks in `benchmarks/`, and a workflow that fails a pull request
+  if any decision path gets more than 25% slower than the base branch.
+- Check that a release tag matches the package version, and publish signed build
+  attestations to PyPI.
 
 ### Fixed
 

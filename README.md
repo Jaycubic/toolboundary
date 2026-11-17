@@ -7,6 +7,9 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml/badge.svg)](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/Jaycubic/toolboundary/branch/main/graph/badge.svg)](https://codecov.io/gh/Jaycubic/toolboundary)
+[![Security](https://github.com/Jaycubic/toolboundary/actions/workflows/security.yml/badge.svg)](https://github.com/Jaycubic/toolboundary/actions/workflows/security.yml)
+[![Performance](https://github.com/Jaycubic/toolboundary/actions/workflows/benchmark.yml/badge.svg)](https://github.com/Jaycubic/toolboundary/actions/workflows/benchmark.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Jaycubic/toolboundary/badge)](https://scorecard.dev/viewer/?uri=github.com/Jaycubic/toolboundary)
 
 ToolBoundary enforces tool permissions, operation allow-lists, rate limits, approval rules,
 emergency stops, audit trails, optional authorization/evidence providers, and token-gated
@@ -65,8 +68,17 @@ audit trail, with secret-looking arguments redacted.
 - **Tests.** About 300 tests cover the policy engine, the decorator and framework adapters,
   the network proxy, tokens, providers, the Redis backends and the policy gateway. They run
   in [CI](https://github.com/Jaycubic/toolboundary/actions/workflows/ci.yml) on Python
-  3.9 to 3.12, with coverage reported to
+  3.9 to 3.13 on Linux, and on Windows and macOS, alongside ruff lint and format checks and
+  mypy type checks. Coverage is reported to
   [Codecov](https://codecov.io/gh/Jaycubic/toolboundary).
+- **Security checks.** The [Security workflow](.github/workflows/security.yml) runs CodeQL,
+  `pip-audit` against the runtime extras, ruff's bandit rules, and dependency review on
+  pull requests. OpenSSF Scorecard runs weekly, and Dependabot keeps dependencies and
+  actions current. Releases are published to PyPI with trusted publishing and signed
+  build attestations.
+- **Performance.** [`benchmarks/`](benchmarks) measures each decision path. On every pull
+  request the [Performance workflow](.github/workflows/benchmark.yml) benchmarks the base
+  branch and the change on the same machine, and fails if any path is more than 25% slower.
 - **Attack-focused tests.** [`tests/test_security_v105.py`](tests/test_security_v105.py) and
   [`tests/test_gateway.py`](tests/test_gateway.py) test known bypass attempts: forged and
   replayed tokens, case and Unicode tricks against block-lists, path traversal, duplicate
@@ -111,13 +123,17 @@ A hardening release. Every user should upgrade.
   ASCII decimal such as `"25"` or `"-25.50"`. Strings with spaces, underscores, exponents,
   a leading `+` or zero, or non-ASCII digits are denied, because a tool's parser might
   read them as a different number.
-- **No negative values under a ceiling.** A `max_value` without a `min_value` now implies a
-  floor of 0, so `-5000` can't pass a `max_value=100` payment limit. Set a negative
-  `min_value` to allow negative values.
+- **A way to stop negative values passing a ceiling.** By default a `max_value=100` payment
+  limit still lets `-5000` through, which on many APIs means a refund or credit. Pass
+  `Boundary(deny_negative_values=True)` to give every `max_value` without a `min_value` a
+  floor of 0. An explicit `min_value` always wins, so tools that take negative values keep
+  working.
 
 ### Upgrade notes
 
-- If a tool legitimately takes negative values, set `min_value` explicitly.
+- A tool with a `max_value` but no `min_value` now raises a `FutureWarning`. Behaviour is
+  unchanged. To silence it, set `min_value` (0, or a negative floor), or pass
+  `deny_negative_values=True`. That floor becomes the default in ToolBoundary 2.0.
 - If you pass numbers as strings with spaces or other formatting, convert them to numbers
   or plain decimal strings before calling ToolBoundary.
 

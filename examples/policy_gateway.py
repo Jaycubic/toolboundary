@@ -52,6 +52,7 @@ def main() -> None:
         "billing-agent",
         autonomy=AutonomyLevel.AUTONOMOUS,
         strict_limits=True,
+        deny_negative_values=True,
         audit=AuditTrail([]),
         permissions=[ToolPermission("billing", access_mode=AccessMode.WRITE, max_value=100)],
     )

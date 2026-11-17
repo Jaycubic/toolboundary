@@ -209,9 +209,7 @@ class TokenIssuer:
             raise TokenInvalid("Token signature does not match; token may be forged or corrupted.")
 
         if time.time() > token.expires_at:
-            raise TokenExpired(
-                f"Token expired at {token.expires_at}, current time {time.time()}."
-            )
+            raise TokenExpired(f"Token expired at {token.expires_at}, current time {time.time()}.")
 
         if expected_agent_name is not None and token.agent_name != expected_agent_name:
             raise TokenInvalid("Token was not issued for this agent.")

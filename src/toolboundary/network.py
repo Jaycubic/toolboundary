@@ -243,9 +243,7 @@ class NetworkEnforcer:
         always populated whether allowed or denied. `method` and `path`
         describe the request the token is being spent on.
         """
-        allowed, reason, base, _token = self._authorize_request(
-            tool_name, token_wire, method, path
-        )
+        allowed, reason, base, _token = self._authorize_request(tool_name, token_wire, method, path)
         return allowed, reason, base
 
     def _authorize_request(
@@ -306,9 +304,7 @@ def _make_handler(enforcer: NetworkEnforcer) -> type[http.server.BaseHTTPRequest
                 try:
                     enforcer._on_denied(tool_name, reason)  # noqa: SLF001
                 except Exception:  # noqa: BLE001
-                    _logger.debug(
-                        "toolboundary.network: on_denied callback raised", exc_info=True
-                    )
+                    _logger.debug("toolboundary.network: on_denied callback raised", exc_info=True)
 
         def _reject(self, status: int, body: bytes) -> None:
             self.close_connection = True

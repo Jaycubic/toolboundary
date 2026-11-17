@@ -76,9 +76,7 @@ _BLOCKED_RESPONSE_HEADERS = _HOP_BY_HOP_HEADERS | {
 _REFUSED_PATH_ESCAPES = ("%2f", "%5c", "%25", "%3b", "%23", "%3f")
 _TEMPLATE_PARAMETER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 
-_upstream_opener = urllib.request.build_opener(
-    urllib.request.ProxyHandler({}), _NoRedirectHandler
-)
+_upstream_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler)
 
 
 class ExtractionError(ValueError):
@@ -340,7 +338,7 @@ def _parse_target(target: str) -> tuple[str, str, str, str] | None:
     if not tool_name or any(token in lowered for token in _REFUSED_PATH_ESCAPES):
         return None
     decoded = unquote(rest, errors="replace")
-    if "�" in decoded or any(ord(char) < 0x20 or ord(char) == 0x7f for char in decoded):
+    if "�" in decoded or any(ord(char) < 0x20 or ord(char) == 0x7F for char in decoded):
         return None
     if rest and any(segment in {"", ".", ".."} for segment in decoded.split("/")):
         return None

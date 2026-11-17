@@ -33,3 +33,8 @@ htmlcov/
 # AgentGuard runtime artifacts (audit logs from examples/local testing)
 *.jsonl
 agentguard-audit.jsonl
+
+# pytest-benchmark storage
+.benchmarks/
+benchmark.json
+benchmark.txt

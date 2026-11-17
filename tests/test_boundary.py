@@ -168,18 +168,37 @@ class TestValueAndRecordLimits:
         assert exc_info.value.rule == "MIN_VALUE_VIOLATED"
 
     @pytest.mark.parametrize("value", [-1, -5000, "-0.01", Decimal("-1")])
-    def test_max_value_alone_implies_a_floor_of_zero(self, value):
+    def test_deny_negative_values_implies_a_floor_of_zero(self, value):
         with pytest.raises(BoundaryViolation) as exc_info:
-            make_boundary().check("wire_transfer", value=value)
+            make_boundary(deny_negative_values=True).check("wire_transfer", value=value)
         assert exc_info.value.rule == "MIN_VALUE_VIOLATED"
 
     def test_zero_passes_an_implied_floor(self):
-        make_boundary().check("wire_transfer", value=0)
+        make_boundary(deny_negative_values=True).check("wire_transfer", value=0)
 
-    def test_explicit_negative_min_value_allows_negatives(self):
+    def test_negatives_pass_a_max_only_limit_by_default(self):
+        with pytest.warns(FutureWarning, match="no min_value"):
+            boundary = make_boundary()
+        boundary.check("wire_transfer", value=-5000)
+
+    def test_deny_negative_values_does_not_warn(self, recwarn):
+        make_boundary(deny_negative_values=True)
+        assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
+
+    def test_explicit_min_value_does_not_warn(self, recwarn):
+        Boundary(
+            agent_name="agent",
+            permissions=[
+                ToolPermission("t", access_mode=AccessMode.EXECUTE, min_value=0, max_value=1)
+            ],
+        )
+        assert not [w for w in recwarn if issubclass(w.category, FutureWarning)]
+
+    def test_explicit_negative_min_value_overrides_deny_negative_values(self):
         boundary = Boundary(
             agent_name="agent",
             autonomy=AutonomyLevel.AUTONOMOUS,
+            deny_negative_values=True,
             permissions=[
                 ToolPermission(
                     "adjust_balance",

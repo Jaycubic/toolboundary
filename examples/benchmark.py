@@ -22,7 +22,7 @@ def bench(label: str, fn, n: int = N) -> None:
         fn()
     elapsed = time.perf_counter() - start
     per_call_us = (elapsed / n) * 1_000_000
-    print(f"{label:55s} {per_call_us:8.2f} us/call   ({n} calls in {elapsed*1000:.1f}ms)")
+    print(f"{label:55s} {per_call_us:8.2f} us/call   ({n} calls in {elapsed * 1000:.1f}ms)")
 
 
 def main() -> None:
@@ -76,7 +76,9 @@ def main() -> None:
     )
     bench(
         "Boundary.check_and_authorize() [full ALLOW + token issuance]",
-        lambda: boundary_with_issuer.check_and_authorize("crm_api", access_mode=AccessMode.READ_ONLY),
+        lambda: boundary_with_issuer.check_and_authorize(
+            "crm_api", access_mode=AccessMode.READ_ONLY
+        ),
     )
 
     print(

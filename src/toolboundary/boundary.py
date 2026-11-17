@@ -23,6 +23,7 @@ import os
 import re
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -155,6 +156,7 @@ class Boundary:
         policy_hooks: list[PolicyHook] | None = None,
         fail_closed_on_hook_error: bool = True,
         strict_limits: bool = False,
+        deny_negative_values: bool = False,
         token_issuer: TokenIssuer | None = None,
         rate_limiter: Any | None = None,
         # -- optional provider configuration --
@@ -167,9 +169,10 @@ class Boundary:
 
         self.agent_name = agent_name
         self.autonomy = autonomy
-        self._permissions: dict[str, ToolPermission] = {
-            p.tool_name: p for p in (permissions or [])
-        }
+        self.deny_negative_values = deny_negative_values
+        self._permissions: dict[str, ToolPermission] = {}
+        for permission in permissions or []:
+            self.add_permission(permission)
         self.blocked_operations = blocked_operations
         self.allowed_environments = allowed_environments
         self.environment = environment
@@ -249,6 +252,19 @@ class Boundary:
     # -- permission management --------------------------------------------
 
     def add_permission(self, permission: ToolPermission) -> None:
+        if (
+            permission.max_value is not None
+            and permission.min_value is None
+            and not self.deny_negative_values
+        ):
+            warnings.warn(
+                f"Tool {permission.tool_name!r} has a max_value but no min_value, so negative "
+                "values pass its limit. Set min_value (0, or a negative floor if the tool takes "
+                "negative values), or pass Boundary(deny_negative_values=True). In "
+                "ToolBoundary 2.0 a max_value without a min_value will imply a floor of 0.",
+                FutureWarning,
+                stacklevel=3,
+            )
         self._permissions[permission.tool_name] = permission
 
     def get_permission(self, tool_name: str) -> ToolPermission | None:
@@ -581,9 +597,7 @@ class Boundary:
         frozen = freeze_with_digest(frozen)
 
         # The digest binds the real values; the provider never receives secrets.
-        frozen = replace(
-            frozen, arguments=redact_structure(arguments, extra_names=sensitive_args)
-        )
+        frozen = replace(frozen, arguments=redact_structure(arguments, extra_names=sensitive_args))
 
         # Step 5: No provider → local-only authorization.
         if self._provider is None:
@@ -668,9 +682,7 @@ class Boundary:
         evidence_metadata["decision_id"] = local_decision.decision_id
         if provider_grant is not None:
             evidence_metadata["provider"] = provider_grant.provider
-            evidence_metadata["provider_decision"] = (
-                "allow" if provider_grant.allowed else "deny"
-            )
+            evidence_metadata["provider_decision"] = "allow" if provider_grant.allowed else "deny"
             if provider_grant.attempt_id:
                 evidence_metadata["attempt_id"] = provider_grant.attempt_id
             if provider_grant.authorization_id:
@@ -918,11 +930,11 @@ class Boundary:
                 operation=ctx.operation,
                 rule=ViolationReason.INVALID_VALUE.value,
             )
-        # A max_value without a min_value implies a floor of 0, so a negative amount
-        # (often a refund or credit) can't pass a ceiling meant for a positive one.
-        # Set min_value to a negative number to allow negative values.
+        # With deny_negative_values, a max_value without a min_value implies a floor of 0,
+        # so a negative amount (often a refund or credit) can't pass a ceiling meant for a
+        # positive one. An explicit min_value always wins.
         min_value = permission.min_value
-        if min_value is None and permission.max_value is not None:
+        if min_value is None and permission.max_value is not None and self.deny_negative_values:
             min_value = 0
         if min_value is not None and value < min_value:
             raise BoundaryViolation(

@@ -101,9 +101,7 @@ def guarded_tool(
             call_kwargs = normalize_call_arguments(func, args, kwargs)
             resolved_operation = call_kwargs.get("operation") or operation
             resolved_value = call_kwargs.get(value_arg) if value_arg else None
-            resolved_record_count = (
-                call_kwargs.get(record_count_arg) if record_count_arg else None
-            )
+            resolved_record_count = call_kwargs.get(record_count_arg) if record_count_arg else None
             resolved_correlation_id = (
                 call_kwargs.get(correlation_id_arg) if correlation_id_arg else None
             )

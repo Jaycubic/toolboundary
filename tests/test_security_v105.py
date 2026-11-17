@@ -554,12 +554,8 @@ def test_enforced_provider_denial_is_audited_as_deny() -> None:
 
 @pytest.mark.parametrize("operation", ["DROP_TABLE", "drop_table ", "ｄｒｏｐ_table"])
 def test_blocked_operations_ignore_case_spacing_and_width(operation: str) -> None:
-    global_block = make_boundary(
-        ToolPermission("db"), blocked_operations=frozenset({"drop_table"})
-    )
-    tool_block = make_boundary(
-        ToolPermission("db", blocked_operations=frozenset({"drop_table"}))
-    )
+    global_block = make_boundary(ToolPermission("db"), blocked_operations=frozenset({"drop_table"}))
+    tool_block = make_boundary(ToolPermission("db", blocked_operations=frozenset({"drop_table"})))
     for boundary in (global_block, tool_block):
         with pytest.raises(BoundaryViolation):
             boundary.check("db", operation=operation)

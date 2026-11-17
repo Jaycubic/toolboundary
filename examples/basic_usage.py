@@ -26,6 +26,7 @@ boundary = Boundary(
         ToolPermission(
             "issue_refund",
             access_mode=AccessMode.EXECUTE,
+            min_value=0.0,
             max_value=100.0,
             requires_approval=True,
         ),

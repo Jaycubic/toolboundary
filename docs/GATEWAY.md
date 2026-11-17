@@ -45,6 +45,7 @@ def build() -> PolicyGateway:
         "billing-agent",
         autonomy=AutonomyLevel.AUTONOMOUS,
         strict_limits=True,  # required by the gateway
+        deny_negative_values=True,  # a negative payment could mean a refund
         kill_switch_file="/var/run/toolboundary/billing-agent.stop",
         permissions=[ToolPermission("billing", access_mode=AccessMode.WRITE, max_value=100)],
     )

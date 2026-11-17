@@ -1,0 +1,85 @@
+name: Performance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  benchmark:
+    name: Benchmark decision paths
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install benchmark tooling
+        run: pip install "pytest>=7.4" "pytest-benchmark>=4.0"
+
+      # On a pull request, measure the base branch first with this change's
+      # benchmark file, so both runs execute the same code on the same machine.
+      - name: Benchmark the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          cp -r benchmarks /tmp/benchmarks
+          git worktree add /tmp/base "$BASE_SHA"
+          pip install /tmp/base
+          cd /tmp
+          python -m pytest /tmp/benchmarks --benchmark-only -p no:cacheprovider \
+            -o addopts="" --benchmark-storage="file://$GITHUB_WORKSPACE/.benchmarks" \
+            --benchmark-save=base
+
+      - name: Benchmark this change
+        run: |
+          pip install --force-reinstall --no-deps .
+          COMPARE=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Fail if the median of any benchmark is more than 25% slower than base.
+            COMPARE="--benchmark-compare=0001 --benchmark-compare-fail=median:25%"
+          fi
+          cp -r benchmarks /tmp/head-benchmarks
+          cd /tmp
+          python -m pytest /tmp/head-benchmarks --benchmark-only -p no:cacheprovider \
+            -o addopts="" --benchmark-storage="file://$GITHUB_WORKSPACE/.benchmarks" \
+            --benchmark-json="$GITHUB_WORKSPACE/benchmark.json" \
+            --benchmark-columns=min,median,mean,ops $COMPARE | tee "$GITHUB_WORKSPACE/benchmark.txt"
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Benchmark results"
+            echo
+            echo '```'
+            sed -n '/benchmark/,$p' benchmark.txt 2>/dev/null || echo "No results."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-results
+          path: |
+            benchmark.json
+            benchmark.txt
+            .benchmarks/
+          if-no-files-found: ignore

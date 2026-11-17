@@ -162,11 +162,7 @@ class Harness:
         self.boundary = boundary or make_boundary()
         self.gateway = PolicyGateway(
             [GatewayAgent(self.boundary, KEY)],
-            [
-                GatewayRoute(
-                    "crm", f"http://127.0.0.1:{upstream.server_address[1]}", **route_kwargs
-                )
-            ],
+            [GatewayRoute("crm", f"http://127.0.0.1:{upstream.server_address[1]}", **route_kwargs)],
             max_response_bytes=32,
             **kwargs,
         )
@@ -234,9 +230,7 @@ def test_client_holds_no_policy_or_signing_material() -> None:
 
 @pytest.mark.parametrize("key", [None, "", "wrong-key", OTHER_KEY, KEY + "x"])
 def test_unauthenticated_requests_are_rejected(harness: Harness, key: str | None) -> None:
-    status, response, _ = harness.raw(
-        "POST", "/crm/payments", pay_body(1), JSON_HEADERS, key=key
-    )
+    status, response, _ = harness.raw("POST", "/crm/payments", pay_body(1), JSON_HEADERS, key=key)
     assert status == 401 and response.getheader(DENIED_HEADER) == "UNAUTHENTICATED"
     assert harness.forwarded == []
 
@@ -351,9 +345,7 @@ def test_unlisted_and_repeated_query_parameters_are_denied(
 
 
 def test_a_limit_cannot_be_skipped_by_a_rule_without_a_value(upstream: Any) -> None:
-    instance = Harness(
-        upstream, route={"rules": (GatewayRule("POST", "pay", AccessMode.WRITE),)}
-    )
+    instance = Harness(upstream, route={"rules": (GatewayRule("POST", "pay", AccessMode.WRITE),)})
     try:
         status, response, _ = instance.raw("POST", "/crm/pay", b"{}", JSON_HEADERS)
         assert status == 403 and response.getheader(DENIED_HEADER) == "VALUE_REQUIRED"
@@ -437,9 +429,7 @@ def test_ambiguous_paths_are_refused(harness: Harness, target: str) -> None:
         "Host-Override",
     ],
 )
-def test_agent_headers_are_not_forwarded_unless_allow_listed(
-    harness: Harness, header: str
-) -> None:
+def test_agent_headers_are_not_forwarded_unless_allow_listed(harness: Harness, header: str) -> None:
     harness.raw("GET", "/crm/orders/1", headers={header: "agent-value"})
     forwarded = harness.forwarded[0]["headers"]
     assert forwarded.get(header) != "agent-value"
@@ -611,9 +601,13 @@ def test_approval_requirement_blocks_forwarding(upstream: Any) -> None:
 
 def test_blocked_operation_uses_the_rule_not_the_agent(upstream: Any) -> None:
     route = {"rules": (GatewayRule("POST", "x", AccessMode.WRITE, operation="BLOCKED"),)}
-    boundary = make_boundary(permissions=[ToolPermission(
-        "crm", access_mode=AccessMode.WRITE, blocked_operations=frozenset({"blocked"})
-    )])
+    boundary = make_boundary(
+        permissions=[
+            ToolPermission(
+                "crm", access_mode=AccessMode.WRITE, blocked_operations=frozenset({"blocked"})
+            )
+        ]
+    )
     instance = Harness(upstream, boundary, route=route)
     try:
         response = instance.client.request("crm", "POST", "x", json_body={})
@@ -831,18 +825,12 @@ def test_gateway_works_over_tls(upstream: Any, tmp_path: Path) -> None:
 
     gateway = PolicyGateway(
         [GatewayAgent(make_boundary(), KEY)],
-        [
-            GatewayRoute(
-                "crm", f"http://127.0.0.1:{upstream.server_address[1]}", rules=rules()
-            )
-        ],
+        [GatewayRoute("crm", f"http://127.0.0.1:{upstream.server_address[1]}", rules=rules())],
         ssl_context=server_context,
     )
     gateway.start(port=0)
     try:
-        client = GatewayClient(
-            f"https://127.0.0.1:{gateway.port}", KEY, ssl_context=client_context
-        )
+        client = GatewayClient(f"https://127.0.0.1:{gateway.port}", KEY, ssl_context=client_context)
         assert client.request("crm", "GET", "orders/1").status == 200
     finally:
         gateway.stop()
@@ -913,9 +901,11 @@ def test_gateway_runs_in_its_own_process(upstream: Any, tmp_path: Path) -> None:
 def test_guarded_tool_without_access_mode_warns_and_stays_read_only() -> None:
     boundary = make_boundary(permissions=[ToolPermission("t")])
     with pytest.warns(FutureWarning, match="access_mode"):
+
         @guarded_tool(boundary, tool_name="t")
         def call() -> str:
             return "ok"
+
     assert call() == "ok"
 
 
@@ -927,6 +917,7 @@ def test_guarded_tool_with_access_mode_does_not_warn() -> None:
         @guarded_tool(boundary, tool_name="t", access_mode=AccessMode.READ_ONLY)
         def call() -> str:
             return "ok"
+
     assert call() == "ok"
 
 

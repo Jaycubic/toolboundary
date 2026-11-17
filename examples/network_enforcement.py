@@ -51,7 +51,9 @@ def start_fake_crm() -> str:
 def main() -> None:
     print("Starting fake internal CRM (the 'real tool' the agent should not reach directly)...")
     crm_url = start_fake_crm()
-    print(f"  Fake CRM listening at {crm_url} (NOT directly reachable by the agent in a real deployment)")
+    print(
+        f"  Fake CRM listening at {crm_url} (NOT directly reachable by the agent in a real deployment)"
+    )
 
     issuer = TokenIssuer(secret="demo-shared-secret", ttl_seconds=10)
 
@@ -83,7 +85,9 @@ def main() -> None:
     try:
         urllib.request.urlopen(req, timeout=5)
     except urllib.error.HTTPError as exc:
-        print(f"  -> HTTP {exc.code}: {exc.read().decode()}  (correctly rejected, CRM never touched)")
+        print(
+            f"  -> HTTP {exc.code}: {exc.read().decode()}  (correctly rejected, CRM never touched)"
+        )
 
     print("\n--- 3. Reusing the SAME token a second time (replay attack) ---")
     req = urllib.request.Request(proxy_url, headers={AUTH_HEADER: token.to_wire()})

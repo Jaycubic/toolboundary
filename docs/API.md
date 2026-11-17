@@ -48,6 +48,7 @@ Boundary(
 | `policy_hooks` | List of callables `(CallContext) -> str | None` for custom logic. Return a string to deny with that reason, `None` to allow. |
 | `fail_closed_on_hook_error` | If `True` (default), an exception inside a policy hook denies the call. If `False`, the hook is treated as "allow" on error. |
 | `strict_limits` | If `True`, require `value` / `record_count` when a matching maximum is configured. Defaults to `False` for compatibility. |
+| `deny_negative_values` | If `True`, a `max_value` without a `min_value` gets a floor of 0, so negative values are denied. An explicit `min_value` always wins. Defaults to `False` for compatibility; becomes the default in 2.0. |
 | `token_issuer` | Optional `toolboundary.tokens.TokenIssuer`. Only needed if you use `check_and_authorize()` / the network enforcement layer. |
 | `rate_limiter` | Optional rate-limiter object exposing `check_and_record` / `current_count` / `reset`. Defaults to the in-memory `SlidingWindowRateLimiter`. Pass `RedisSlidingWindowRateLimiter` from `toolboundary.redis_backend` for multi-replica deployments. |
 
@@ -123,8 +124,11 @@ can still be called with `access_mode=READ_ONLY`).
 
 When `allowed_operations` is set, each call must specify an operation from
 that allow-list. `min_value` and `max_value` bound numeric values when a
-value is supplied. A `max_value` without a `min_value` implies a floor of 0;
-set a negative `min_value` to allow negative values. A value given as a string
+value is supplied. A `max_value` without a `min_value` lets negative values
+through and raises a `FutureWarning`. Set `min_value` explicitly (0, or a
+negative floor for tools that take negative values), or pass
+`Boundary(deny_negative_values=True)` to give every such limit a floor of 0.
+That floor becomes the default in ToolBoundary 2.0. A value given as a string
 must be a plain ASCII decimal such as `"25"` or `"-25.50"`; anything else is
 denied with `INVALID_VALUE`. By default, omitted values do not trigger a ceiling;
 `Boundary(strict_limits=True)` requires values when the corresponding

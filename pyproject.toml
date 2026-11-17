@@ -27,6 +27,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -47,6 +48,8 @@ dev = [
     "pytest>=7.4",
     "pytest-asyncio>=1.0",
     "pytest-cov>=4.1",
+    "pytest-benchmark>=4.0",
+    "pip-audit>=2.7",
     "ruff>=0.4",
     "mypy>=1.8",
     "langchain-core>=0.3.81,!=1.0.*,!=1.1.*,!=1.2.0,!=1.2.1,!=1.2.2,!=1.2.3,!=1.2.4",
@@ -69,6 +72,11 @@ path = "src/toolboundary/__init__.py"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=toolboundary --cov-report=term-missing"
+filterwarnings = [
+    # Most test fixtures set a max_value without a min_value on purpose. The warning
+    # itself is tested with pytest.warns, which still records it.
+    "ignore:Tool .* has a max_value but no min_value:FutureWarning",
+]
 
 [tool.ruff]
 line-length = 100
@@ -85,8 +93,16 @@ ignore = ["S101"]
 # as fixture data -- S310/S106 exist to catch untrusted URLs and real
 # leaked credentials in production code, neither of which applies here.
 "tests/*" = ["S310", "S106"]
+# Benchmarks use fake literal token secrets as fixture data, like the tests.
+"benchmarks/*" = ["S106"]
 
 [tool.mypy]
-python_version = "3.9"
+# The oldest version current mypy can target; the code itself supports 3.9.
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+# Optional framework extras that are not installed in the type-check job.
+module = ["crewai.*"]
+ignore_missing_imports = true
