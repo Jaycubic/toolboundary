@@ -128,6 +128,10 @@ A hardening release. Every user should upgrade.
   `Boundary(deny_negative_values=True)` to give every `max_value` without a `min_value` a
   floor of 0. An explicit `min_value` always wins, so tools that take negative values keep
   working.
+- **Stronger project checks.** CI now tests Windows, macOS and Python 3.13 and checks
+  formatting and types. New workflows run CodeQL, dependency audits, OpenSSF Scorecard and
+  performance benchmarks on every change, and releases carry signed build attestations.
+  See [Supporting evidence](#supporting-evidence).
 
 ### Upgrade notes
 

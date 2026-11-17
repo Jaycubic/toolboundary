@@ -864,6 +864,8 @@ def test_gateway_runs_in_its_own_process(upstream: Any, tmp_path: Path) -> None:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
+    log_path = tmp_path / "gateway.log"
+    log = log_path.open("wb")
     process = subprocess.Popen(  # noqa: S603
         [
             sys.executable,
@@ -875,24 +877,28 @@ def test_gateway_runs_in_its_own_process(upstream: Any, tmp_path: Path) -> None:
             str(port),
         ],
         cwd=tmp_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
     )
     try:
-        deadline = time.time() + 20
+        # Generous: a cold interpreter start on a busy CI runner (notably macOS) can be slow.
+        deadline = time.time() + 60
         while True:
             try:
-                socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
+                socket.create_connection(("127.0.0.1", port), timeout=1).close()
                 break
             except OSError:
-                assert time.time() < deadline and process.poll() is None
-                time.sleep(0.1)
+                output = log_path.read_text(errors="replace")
+                assert process.poll() is None, f"gateway exited early:\n{output}"
+                assert time.time() < deadline, f"gateway did not start in time:\n{output}"
+                time.sleep(0.2)
         client = GatewayClient(f"http://127.0.0.1:{port}", KEY)
         assert client.request("crm", "GET", "orders/1").status == 200
         assert client.request("crm", "GET", "orders/1/x").denied_reason == "REQUEST_NOT_ALLOWED"
     finally:
         process.terminate()
         process.wait(timeout=10)
+        log.close()
 
 
 # -- access_mode warning -------------------------------------------------------

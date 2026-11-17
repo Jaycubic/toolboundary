@@ -34,12 +34,56 @@ important — they verify the core invariant that a local DENY can never be
 turned into an ALLOW by an external provider. Any change to the authorization
 flow must pass these tests.
 
-## Linting
+## Linting, formatting and types
 
 ```bash
-ruff check src tests
+ruff check src tests benchmarks
+ruff format src tests benchmarks
 mypy src
 ```
+
+CI runs all three and fails if `ruff format --check` would change anything.
+
+## Benchmarks
+
+```bash
+pytest benchmarks --benchmark-only --no-cov
+```
+
+`benchmarks/test_performance.py` measures each decision path. On every pull
+request the Performance workflow runs it against the base branch and against
+your change on the same machine, and fails if any benchmark's median gets more
+than 25% slower. If a slowdown is intended, say why in the pull request.
+
+## Continuous integration
+
+Every push and pull request to `main` runs these workflows:
+
+| Workflow | What it checks |
+|---|---|
+| CI | ruff lint and format, mypy, tests on Python 3.9–3.13 on Linux and on Windows and macOS, and a build of the package that is installed and smoke-tested |
+| Security | CodeQL, `pip-audit` on the runtime extras, ruff's bandit rules, and dependency review on pull requests |
+| Performance | benchmarks against the base branch |
+| OpenSSF Scorecard | repository security practices (also weekly) |
+
+Dependabot opens weekly pull requests for Python dependencies and GitHub
+Actions. Actions are pinned to full commit SHAs; keep new ones pinned too.
+
+If `pip-audit` reports an advisory that can't be fixed in this repository, for
+example one in a dependency of an optional extra with no fixed release, add it to
+the ignore list in `.github/workflows/security.yml` with a comment naming the
+package and why. Remove it once a fix ships.
+
+## Releasing
+
+1. Update `__version__` in `src/toolboundary/__init__.py`, `CHANGELOG.md`, the
+   README's "What's new" section and the supported version in `SECURITY.md`.
+2. Merge to `main` and wait for every workflow to pass.
+3. Tag the commit `vX.Y.Z` and publish a GitHub release from the tag.
+
+Publishing the release runs `publish.yml`, which refuses to continue if the tag
+doesn't match `__version__`, then uploads to PyPI with trusted publishing and
+signed build attestations.
 
 ## Project structure
 
@@ -63,6 +107,10 @@ src/toolboundary/
         langchain.py         # LangChain BaseTool wrapping (provider-aware)
         crewai.py            # CrewAI BaseTool wrapping (provider-aware)
         agentkey.py          # AgentKey provider adapter (optional integration)
+tests/                       # unit, integration and attack-focused tests
+benchmarks/                  # pytest-benchmark performance suite
+examples/                    # runnable usage examples
+docs/                        # API reference and gateway guide
 ```
 
 ## Architecture: the provider layer

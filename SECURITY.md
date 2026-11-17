@@ -17,6 +17,21 @@ enforcement, or disable the kill switch.
 Please reproduce issues against the latest release where possible. If an older
 release is affected, include the exact version and a minimal reproduction.
 
+## How the project checks itself
+
+- Every change runs CodeQL, ruff's bandit rules, and `pip-audit` against the runtime
+  dependencies, and pull requests get dependency review. These also run weekly to
+  catch newly published advisories.
+- OpenSSF Scorecard checks the repository's security practices weekly.
+- Dependabot keeps Python dependencies and GitHub Actions current, and every action is
+  pinned to a full commit SHA.
+- Releases are published to PyPI with trusted publishing, not a stored token, and each
+  file carries a signed build attestation showing it came from this repository's
+  release workflow.
+- Advisories that can't be fixed here, such as ones in an optional extra's dependency
+  with no fixed release, are listed with a reason in
+  `.github/workflows/security.yml`.
+
 ## Reporting a vulnerability
 
 Open a private security advisory through GitHub:
