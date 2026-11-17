@@ -38,3 +38,4 @@ agentguard-audit.jsonl
 .benchmarks/
 benchmark.json
 benchmark.txt
+junit.xml

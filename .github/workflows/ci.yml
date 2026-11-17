@@ -74,7 +74,22 @@ jobs:
         run: pip install -e ".[crewai]"
 
       - name: Run tests with coverage
-        run: pytest --cov=toolboundary --cov-report=xml --cov-report=term-missing
+        run: pytest --cov=toolboundary --cov-report=xml --cov-report=term-missing --junitxml=junit.xml
+
+      - name: Report failing tests as annotations
+        if: failure()
+        shell: python
+        run: |
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          if Path("junit.xml").exists():
+              for case in ET.parse("junit.xml").iter("testcase"):
+                  for problem in list(case.iter("failure")) + list(case.iter("error")):
+                      name = f"{case.get('classname')}::{case.get('name')}"
+                      text = (problem.get("message") or problem.text or "").strip()
+                      detail = text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+                      print(f"::error title={name}::{detail[:3000]}")
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-24.04'
